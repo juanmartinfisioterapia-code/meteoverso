@@ -5,12 +5,12 @@ const WMO = {
   2:{icon:"⛅",label:"Parc. nublado"},3:{icon:"☁️",label:"Nublado"},
   45:{icon:"🌫️",label:"Niebla"},48:{icon:"🌫️",label:"Niebla helada"},
   51:{icon:"🌦️",label:"Llovizna"},53:{icon:"🌧️",label:"Llovizna mod."},
-  55:{icon:"🌧️",label:"Llovizna densa"},61:{icon:"🌧️",label:"Lluvia ligera"},
-  63:{icon:"🌧️",label:"Lluvia mod."},65:{icon:"🌧️",label:"Lluvia fuerte"},
-  71:{icon:"🌨️",label:"Nieve ligera"},73:{icon:"❄️",label:"Nieve"},
-  75:{icon:"❄️",label:"Nieve fuerte"},80:{icon:"🌦️",label:"Chubascos"},
-  81:{icon:"🌧️",label:"Chubascos mod."},82:{icon:"⛈️",label:"Chubascos fuertes"},
-  95:{icon:"⛈️",label:"Tormenta"},99:{icon:"⛈️",label:"Tormenta+granizo"},
+  61:{icon:"🌧️",label:"Lluvia ligera"},63:{icon:"🌧️",label:"Lluvia mod."},
+  65:{icon:"🌧️",label:"Lluvia fuerte"},71:{icon:"🌨️",label:"Nieve ligera"},
+  73:{icon:"❄️",label:"Nieve"},75:{icon:"❄️",label:"Nieve fuerte"},
+  80:{icon:"🌦️",label:"Chubascos"},81:{icon:"🌧️",label:"Chubascos mod."},
+  82:{icon:"⛈️",label:"Chubascos fuertes"},95:{icon:"⛈️",label:"Tormenta"},
+  99:{icon:"⛈️",label:"Tormenta+granizo"},
 };
 const wmo = c => WMO[c] ?? WMO[Math.floor((c||0)/10)*10] ?? {icon:"🌡️",label:"Variable"};
 const windDir = d => ["N","NE","E","SE","S","SO","O","NO"][Math.round((d||0)/45)%8];
@@ -20,9 +20,9 @@ const fmtHour = d => `${String(d.getHours()).padStart(2,"0")}:00`;
 const fmtTime = s => s ? s.slice(11,16) : "—";
 
 const MODELS = [
-  {id:"best",  name:"Meteoverso",    badge:"RECOMENDADO", badgeC:"#60A5FA", color:"#60A5FA", bg:"rgba(96,165,250,.08)",  br:"rgba(96,165,250,.28)",  tag:"🇪🇸 Mejor para España", res:"Auto", param:"best_match"},
-  {id:"ecmwf", name:"El Tiempo.es",  badge:"ECMWF",       badgeC:"#38BDF8", color:"#38BDF8", bg:"rgba(56,189,248,.07)",  br:"rgba(56,189,248,.25)",  tag:"🇪🇺 Modelo Europeo",   res:"9 km",  param:"ecmwf_ifs025"},
-  {id:"icon",  name:"Windy.com",     badge:"ICON-EU",      badgeC:"#93C5FD", color:"#93C5FD", bg:"rgba(147,197,253,.07)", br:"rgba(147,197,253,.22)", tag:"🇩🇪 Modelo Alemán",    res:"2 km",  param:"icon_seamless"},
+  {id:"best",  name:"Meteoverso",   badge:"RECOMENDADO", badgeC:"#60A5FA", color:"#60A5FA", bg:"rgba(96,165,250,.08)",  br:"rgba(96,165,250,.28)",  tag:"🇪🇸 Mejor para España", res:"Auto", param:"best_match"},
+  {id:"ecmwf", name:"El Tiempo.es", badge:"ECMWF",       badgeC:"#38BDF8", color:"#38BDF8", bg:"rgba(56,189,248,.07)",  br:"rgba(56,189,248,.25)",  tag:"🇪🇺 Modelo Europeo",   res:"9 km",  param:"ecmwf_ifs025"},
+  {id:"icon",  name:"Windy.com",    badge:"ICON-EU",      badgeC:"#93C5FD", color:"#93C5FD", bg:"rgba(147,197,253,.07)", br:"rgba(147,197,253,.22)", tag:"🇩🇪 Modelo Alemán",    res:"2 km",  param:"icon_seamless"},
 ];
 
 const CITIES = ["Madrid","Barcelona","Sevilla","Valencia","Bilbao","Málaga","Zaragoza","Palma","Tenerife","A Coruña"];
@@ -62,7 +62,6 @@ async function fetchWeather(lat, lon, param) {
           wind: Math.round(d.hourly.wind_speed_10m[i]),
           windD: d.hourly.wind_direction_10m[i],
           humidity: d.hourly.relative_humidity_2m[i],
-          uv: d.hourly.uv_index?.[i],
           info: wmo(d.hourly.weather_code[i]),
         });
       }
@@ -120,7 +119,38 @@ function buildConsensus(data) {
   };
 }
 
-// ─── Section header ───────────────────────────────────────────────────────────
+async function generateVeredicto(results, cityName) {
+  const valid = MODELS.map(m => results[m.id]).filter(d => d?.temp != null);
+  if (!valid.length) return null;
+  const temps = valid.map(d => d.temp);
+  const spread = Math.max(...temps) - Math.min(...temps);
+  const conf = spread===0?100:spread===1?85:spread===2?65:spread<=4?45:20;
+  const summary = MODELS.map(m => {
+    const d = results[m.id];
+    if (!d || d.error) return null;
+    const day = d.daily?.[0];
+    const rainHours = d.hourly?.filter(h => h.precip > 0.2).length ?? 0;
+    return `${m.name}: ahora ${d.temp}C ${d.info.label}, max ${day?.tempMax ?? "?"}C min ${day?.tempMin ?? "?"}C, lluvia en ${rainHours}h, viento ${d.wind}km/h`;
+  }).filter(Boolean).join(". ");
+  const fiab = conf >= 80 ? "Alta fiabilidad" : conf >= 50 ? "Fiabilidad media" : "Baja fiabilidad";
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 120,
+        system: "Eres el asistente de Meteoverso. Da UN VEREDICTO en 1-2 frases, en español, tono cercano y practico. Sin tecnicismos. Di exactamente que esperar hoy: si llevar paraguas, si hace calor, si es buen dia para salir. Termina con el nivel de fiabilidad del pronostico. Nunca uses asteriscos ni markdown.",
+        messages: [{ role: "user", content: `Ciudad: ${cityName}. ${summary}. Concordancia: ${conf}% (dispersion +/-${spread}C). Nivel: ${fiab}. Da el veredicto.` }],
+      }),
+    });
+    const d = await res.json();
+    return d.content?.find(b => b.type === "text")?.text?.trim() ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function SectionTitle({ emoji, title, sub }) {
   return (
     <div style={{marginBottom:14,paddingTop:28,borderTop:"1px solid rgba(255,255,255,.05)"}}>
@@ -134,44 +164,17 @@ function SectionTitle({ emoji, title, sub }) {
 }
 
 export default function App() {
-  const [input,    setInput]    = useState("");
-  const [drops,    setDrops]    = useState([]);
-  const [showDrop, setShowDrop] = useState(false);
-  const [loc,      setLoc]      = useState(null);
-  const [data,     setData]     = useState({});
-  const [status,   setStatus]   = useState("idle");
-  const [errMsg,   setErrMsg]   = useState("");
+  const [input,        setInput]        = useState("");
+  const [drops,        setDrops]        = useState([]);
+  const [showDrop,     setShowDrop]     = useState(false);
+  const [loc,          setLoc]          = useState(null);
+  const [data,         setData]         = useState({});
+  const [status,       setStatus]       = useState("idle");
+  const [errMsg,       setErrMsg]       = useState("");
+  const [geoLoading,   setGeoLoading]   = useState(false);
+  const [veredicto,    setVeredicto]    = useState("");
+  const [vLoad,        setVLoad]        = useState(false);
   const deb = useRef(null);
-  const [geoLoading, setGeoLoading] = useState(false);
-
-  const useGeo = () => {
-    if (!navigator.geolocation) { setErrMsg("Tu navegador no soporta geolocalización"); return; }
-    setGeoLoading(true);
-    setErrMsg("");
-    navigator.geolocation.getCurrentPosition(
-      async pos => {
-        const { latitude: lat, longitude: lon } = pos.coords;
-        try {
-          const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=a&latitude=${lat}&longitude=${lon}&count=1&language=es&format=json`);
-          const d = await r.json();
-          const name = d.results?.[0]?.name ?? "Tu ubicación";
-          setInput(name);
-          setGeoLoading(false);
-          runModels(lat, lon, name);
-        } catch {
-          setInput("Tu ubicación");
-          setGeoLoading(false);
-          runModels(lat, lon, "Tu ubicación");
-        }
-      },
-      err => {
-        setGeoLoading(false);
-        if (err.code === 1) setErrMsg("Permiso denegado. Busca tu ciudad manualmente.");
-        else setErrMsg("No se pudo obtener tu ubicación.");
-      },
-      { timeout: 10000 }
-    );
-  };
 
   useEffect(() => {
     if (input.length < 2) { setDrops([]); setShowDrop(false); return; }
@@ -188,6 +191,8 @@ export default function App() {
     setData({});
     setStatus("loading");
     setErrMsg("");
+    setVeredicto("");
+    setVLoad(true);
     const results = {};
     await Promise.all(MODELS.map(async m => {
       try   { results[m.id] = await fetchWeather(lat, lon, m.param); }
@@ -196,7 +201,10 @@ export default function App() {
     const anyOk = Object.values(results).some(d => d?.temp != null);
     setData(results);
     setStatus(anyOk ? "done" : "error");
-    if (!anyOk) setErrMsg("No se pudieron cargar los datos.");
+    if (!anyOk) { setErrMsg("No se pudieron cargar los datos."); setVLoad(false); return; }
+    const v = await generateVeredicto(results, name);
+    setVeredicto(v ?? "Pronóstico cargado. Revisa los datos para planificar tu día.");
+    setVLoad(false);
   };
 
   const doSearch = async () => {
@@ -225,6 +233,29 @@ export default function App() {
     } catch(e) { setStatus("error"); setErrMsg("Error: " + e.message); }
   };
 
+  const useGeo = () => {
+    if (!navigator.geolocation) { setErrMsg("Tu navegador no soporta geolocalización"); return; }
+    setGeoLoading(true); setErrMsg("");
+    navigator.geolocation.getCurrentPosition(
+      async pos => {
+        const { latitude: lat, longitude: lon } = pos.coords;
+        try {
+          const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=a&latitude=${lat}&longitude=${lon}&count=1&language=es&format=json`);
+          const d = await r.json();
+          const name = d.results?.[0]?.name ?? "Tu ubicación";
+          setInput(name); setGeoLoading(false); runModels(lat, lon, name);
+        } catch {
+          setInput("Tu ubicación"); setGeoLoading(false); runModels(lat, lon, "Tu ubicación");
+        }
+      },
+      err => {
+        setGeoLoading(false);
+        setErrMsg(err.code === 1 ? "Permiso denegado. Busca tu ciudad manualmente." : "No se pudo obtener tu ubicación.");
+      },
+      { timeout: 10000 }
+    );
+  };
+
   const con = buildConsensus(data);
   const isLoading = status === "loading" || status === "searching";
 
@@ -239,11 +270,13 @@ export default function App() {
         @keyframes shimmer{0%,100%{opacity:.1}50%{opacity:.3}}
         @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
         @keyframes twinkle{0%,100%{opacity:.12}50%{opacity:.6}}
+        @keyframes fadeIn{from{opacity:0}to{opacity:1}}
         .city-pill:hover{background:rgba(56,189,248,.12)!important;color:#38BDF8!important;border-color:rgba(56,189,248,.3)!important}
         .drop-row:hover{background:rgba(56,189,248,.07)!important}
         .src-card{transition:transform .2s,box-shadow .2s}
         .src-card:hover{transform:translateY(-3px);box-shadow:0 12px 40px rgba(0,0,0,.4)}
         .hour-pill:hover{background:rgba(255,255,255,.07)!important}
+        .geo-btn:hover{background:linear-gradient(135deg,rgba(56,189,248,.2),rgba(96,165,250,.2))!important;border-color:rgba(56,189,248,.6)!important}
       `}</style>
 
       {/* BG */}
@@ -270,26 +303,27 @@ export default function App() {
 
         {/* SEARCH */}
         <div style={{position:"relative",maxWidth:560,margin:"0 auto 22px",animation:"fadeUp .5s ease .08s both"}}>
-          {/* Geolocation button */}
-          <button onClick={useGeo} disabled={isLoading||geoLoading}
-            style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"linear-gradient(135deg,rgba(56,189,248,.12),rgba(96,165,250,.12))",border:"1px solid rgba(56,189,248,.3)",borderRadius:12,padding:"11px",marginBottom:8,cursor:isLoading||geoLoading?"not-allowed":"pointer",transition:"all .2s",opacity:isLoading||geoLoading?.6:1}}
-            onMouseEnter={e=>{if(!isLoading&&!geoLoading){e.currentTarget.style.background="linear-gradient(135deg,rgba(56,189,248,.2),rgba(96,165,250,.2))";e.currentTarget.style.borderColor="rgba(56,189,248,.6)";}}}
-            onMouseLeave={e=>{e.currentTarget.style.background="linear-gradient(135deg,rgba(56,189,248,.12),rgba(96,165,250,.12))";e.currentTarget.style.borderColor="rgba(56,189,248,.3)";}}>
+
+          {/* Geo button */}
+          <button onClick={useGeo} disabled={isLoading||geoLoading} className="geo-btn"
+            style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"linear-gradient(135deg,rgba(56,189,248,.1),rgba(96,165,250,.1))",border:"1px solid rgba(56,189,248,.28)",borderRadius:12,padding:"11px",marginBottom:8,cursor:isLoading||geoLoading?"not-allowed":"pointer",transition:"all .2s",opacity:isLoading||geoLoading?.6:1}}>
             {geoLoading
               ? <div style={{width:14,height:14,border:"2px solid rgba(56,189,248,.3)",borderTopColor:"#38BDF8",borderRadius:"50%",animation:"spin .7s linear infinite"}}/>
               : <span style={{fontSize:16}}>📍</span>
             }
             <span style={{color:"#38BDF8",fontSize:13,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
-              {geoLoading?"Detectando ubicación...":"Usar mi ubicación"}
+              {geoLoading ? "Detectando ubicación..." : "Usar mi ubicación"}
             </span>
           </button>
 
+          {/* Divider */}
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
             <div style={{flex:1,height:1,background:"rgba(255,255,255,.06)"}}/>
             <span style={{color:"#1e3a5f",fontSize:11,fontFamily:"'DM Mono',monospace"}}>o busca</span>
             <div style={{flex:1,height:1,background:"rgba(255,255,255,.06)"}}/>
           </div>
 
+          {/* Search input */}
           <div style={{display:"flex",gap:8,background:"rgba(255,255,255,.04)",border:"1px solid rgba(56,189,248,.25)",borderRadius:16,padding:"7px 7px 7px 16px",alignItems:"center",transition:"border-color .2s,box-shadow .2s"}}
             onFocusCapture={e=>{e.currentTarget.style.borderColor="rgba(56,189,248,.6)";e.currentTarget.style.boxShadow="0 0 0 3px rgba(56,189,248,.1)";}}
             onBlurCapture={e=>{e.currentTarget.style.borderColor="rgba(56,189,248,.25)";e.currentTarget.style.boxShadow="none";}}
@@ -304,6 +338,8 @@ export default function App() {
               {isLoading?(status==="searching"?"Buscando...":"Cargando..."):"Comparar"}
             </button>
           </div>
+
+          {/* Dropdown */}
           {showDrop && drops.length > 0 && !isLoading && (
             <div style={{position:"absolute",top:"calc(100% + 5px)",left:0,right:0,background:"#0a1628",border:"1px solid rgba(56,189,248,.2)",borderRadius:12,overflow:"hidden",zIndex:300,boxShadow:"0 20px 60px rgba(0,0,0,.9)"}}>
               {drops.slice(0,5).map((c,i)=>(
@@ -319,11 +355,12 @@ export default function App() {
           )}
         </div>
 
+        {/* Error */}
         {status==="error" && errMsg && (
           <div style={{maxWidth:560,margin:"0 auto 18px",background:"rgba(252,165,165,.07)",border:"1px solid rgba(252,165,165,.25)",borderRadius:10,padding:"11px 16px",color:"#FCA5A5",fontSize:13,animation:"fadeUp .3s ease both"}}>⚠️ {errMsg}</div>
         )}
 
-        {/* QUICK CITIES */}
+        {/* Quick cities */}
         {status==="idle" && (
           <div style={{animation:"fadeUp .5s ease .12s both"}}>
             <div style={{display:"flex",gap:6,justifyContent:"center",flexWrap:"wrap",marginBottom:22}}>
@@ -338,7 +375,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ══ RESULTS ══ */}
+        {/* RESULTS */}
         {(isLoading || status==="done") && (
           <div style={{animation:"fadeUp .4s ease both"}}>
 
@@ -350,17 +387,37 @@ export default function App() {
               </div>
             )}
 
-            {/* ══ SECCIÓN 1: AHORA ══ */}
+            {/* VEREDICTO IA */}
+            {(vLoad || veredicto) && (
+              <div style={{background:"linear-gradient(135deg,rgba(56,189,248,.07),rgba(96,165,250,.05))",border:"1px solid rgba(56,189,248,.22)",borderRadius:16,padding:"18px 20px",marginBottom:16,position:"relative",overflow:"hidden",animation:"fadeIn .4s ease both"}}>
+                <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:"linear-gradient(90deg,#38BDF8,#60A5FA,#93C5FD)"}}/>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                  <span style={{fontSize:20}}>🧠</span>
+                  <span style={{color:"#38BDF8",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".1em",fontFamily:"'DM Mono',monospace"}}>El Veredicto</span>
+                  <span style={{color:"#0f2a42",fontSize:10,fontFamily:"'DM Mono',monospace"}}>· IA Meteoverso</span>
+                </div>
+                {vLoad ? (
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <div style={{width:14,height:14,border:"2px solid rgba(56,189,248,.3)",borderTopColor:"#38BDF8",borderRadius:"50%",animation:"spin .7s linear infinite",flexShrink:0}}/>
+                    <span style={{color:"#1e4060",fontSize:13,fontFamily:"'DM Mono',monospace"}}>Analizando los 3 modelos...</span>
+                  </div>
+                ) : (
+                  <p style={{color:"#e0f2fe",fontSize:15,lineHeight:1.7,fontWeight:500}}>{veredicto}</p>
+                )}
+              </div>
+            )}
+
+            {/* SECCION AHORA */}
             <SectionTitle emoji="⚡" title="Ahora mismo" sub="los 3 modelos"/>
 
-            {/* Consensus bar */}
+            {/* Consensus */}
             <div style={{background:"rgba(56,189,248,.04)",border:"1px solid rgba(56,189,248,.14)",borderRadius:16,padding:"18px 20px",marginBottom:14}}>
-              {isLoading&&!con?(
+              {isLoading&&!con ? (
                 <div style={{display:"flex",gap:16,alignItems:"center"}}>
                   <div style={{height:60,width:150,background:"rgba(255,255,255,.04)",borderRadius:10,animation:"shimmer 1.4s ease infinite"}}/>
                   <div style={{flex:1}}>{[80,60,100,50].map((w,i)=><div key={i} style={{height:i===2?5:9,width:`${w}%`,background:"rgba(255,255,255,.04)",borderRadius:6,marginBottom:8,animation:"shimmer 1.4s ease infinite"}}/>)}</div>
                 </div>
-              ):con?(
+              ) : con ? (
                 <div style={{display:"flex",gap:18,flexWrap:"wrap",alignItems:"center"}}>
                   <div>
                     <div style={{color:"#0f2a42",fontSize:9,textTransform:"uppercase",letterSpacing:".1em",fontFamily:"'DM Mono',monospace",marginBottom:4}}>Consenso</div>
@@ -380,7 +437,7 @@ export default function App() {
                         <div style={{width:`${con.conf}%`,height:"100%",background:con.cColor,borderRadius:6,transition:"width 1.2s ease"}}/>
                       </div>
                       <div style={{color:"#0f2035",fontSize:10,marginTop:3,fontFamily:"'DM Mono',monospace"}}>
-                        ±{con.spread}°C dispersión
+                        {con.spread}°C de dispersión
                         {con.spread===0&&<span style={{color:"#86EFAC",marginLeft:6}}>✓ Total acuerdo</span>}
                         {con.spread>=3&&<span style={{color:"#FCA5A5",marginLeft:6}}>⚠ Alta incertidumbre</span>}
                       </div>
@@ -395,10 +452,10 @@ export default function App() {
                     </div>
                   </div>
                 </div>
-              ):null}
+              ) : null}
             </div>
 
-            {/* 3 current cards */}
+            {/* 3 cards */}
             <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:8}}>
               {MODELS.map(m=>{
                 const d=data[m.id];
@@ -407,7 +464,7 @@ export default function App() {
                     <div style={{position:"absolute",top:10,right:10,background:`${m.badgeC}18`,border:`1px solid ${m.badgeC}35`,borderRadius:20,padding:"2px 7px",fontSize:8,color:m.badgeC,fontFamily:"'DM Mono',monospace",fontWeight:700}}>{m.badge}</div>
                     <div style={{marginBottom:10}}>
                       <span style={{background:`${m.color}20`,border:`1px solid ${m.br}`,borderRadius:7,padding:"3px 9px",color:m.color,fontSize:11,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{m.name}</span>
-                      <span style={{color:"#1e3a5f",fontSize:10,marginLeft:6}}>{m.tag}</span>
+                      <div style={{color:"#1e3a5f",fontSize:9,marginTop:3}}>{m.tag}</div>
                     </div>
                     {isLoading?[52,38,68,55].map((w,i)=><div key={i} style={{height:9,width:`${w}%`,background:"rgba(255,255,255,.05)",borderRadius:5,marginBottom:7,animation:"shimmer 1.4s ease infinite",animationDelay:`${i*.1}s`}}/>)
                     :!d?<div style={{color:"#1e3a5f",fontSize:12}}>Sin datos</div>
@@ -435,19 +492,16 @@ export default function App() {
               })}
             </div>
 
-            {/* ══ SECCIÓN 2: 24 HORAS ══ */}
-            <SectionTitle emoji="🕐" title="Próximas 24 horas" sub="scroll →"/>
-
+            {/* SECCION 24H */}
+            <SectionTitle emoji="🕐" title="Próximas 24 horas" sub="desliza →"/>
             {MODELS.map(m => {
               const d = data[m.id];
               return (
                 <div key={m.id} style={{marginBottom:12}}>
-                  {/* Model label */}
                   <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:8}}>
                     <span style={{background:`${m.color}20`,border:`1px solid ${m.br}`,borderRadius:7,padding:"3px 10px",color:m.color,fontSize:11,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{m.name}</span>
                     <span style={{color:"#1e3a5f",fontSize:10}}>{m.tag}</span>
                   </div>
-                  {/* Horizontal scroll strip */}
                   <div style={{overflowX:"auto",paddingBottom:6}}>
                     <div style={{display:"flex",gap:6,minWidth:"max-content"}}>
                       {isLoading ? (
@@ -461,27 +515,17 @@ export default function App() {
                             <div style={{fontSize:22,marginBottom:3}}>{h.info.icon}</div>
                             <div style={{fontFamily:"'Syne',sans-serif",fontSize:18,fontWeight:900,color:"#f0f9ff",marginBottom:6}}>{h.temp}°</div>
                             <div style={{display:"flex",flexDirection:"column",gap:3}}>
-                              <div style={{display:"flex",justifyContent:"space-between"}}>
-                                <span style={{fontSize:9,color:"#1e4060"}}>💧</span>
-                                <span style={{color:"#bae6fd",fontSize:9,fontFamily:"'DM Mono',monospace"}}>{h.precipProb}%</span>
-                              </div>
-                              <div style={{display:"flex",justifyContent:"space-between"}}>
-                                <span style={{fontSize:9,color:"#1e4060"}}>🌧️</span>
-                                <span style={{color:"#bae6fd",fontSize:9,fontFamily:"'DM Mono',monospace"}}>{h.precip}mm</span>
-                              </div>
-                              <div style={{display:"flex",justifyContent:"space-between"}}>
-                                <span style={{fontSize:9,color:"#1e4060"}}>💨</span>
-                                <span style={{color:"#bae6fd",fontSize:9,fontFamily:"'DM Mono',monospace"}}>{h.wind}km</span>
-                              </div>
-                              <div style={{display:"flex",justifyContent:"space-between"}}>
-                                <span style={{fontSize:9,color:"#1e4060"}}>💦</span>
-                                <span style={{color:"#bae6fd",fontSize:9,fontFamily:"'DM Mono',monospace"}}>{h.humidity}%</span>
-                              </div>
+                              {[{e:"💧",v:`${h.precipProb}%`},{e:"🌧️",v:`${h.precip}mm`},{e:"💨",v:`${h.wind}km`},{e:"💦",v:`${h.humidity}%`}].map(({e,v})=>(
+                                <div key={e} style={{display:"flex",justifyContent:"space-between"}}>
+                                  <span style={{fontSize:9}}>{e}</span>
+                                  <span style={{color:"#bae6fd",fontSize:9,fontFamily:"'DM Mono',monospace"}}>{v}</span>
+                                </div>
+                              ))}
                             </div>
                           </div>
                         ))
                       ) : (
-                        <div style={{color:"#1e4060",fontSize:12,padding:"10px"}}>Sin datos horarios</div>
+                        <div style={{color:"#1e4060",fontSize:12,padding:"10px"}}>Sin datos</div>
                       )}
                     </div>
                   </div>
@@ -489,68 +533,44 @@ export default function App() {
               );
             })}
 
-            {/* ══ SECCIÓN 3: 7 DÍAS ══ */}
+            {/* SECCION 7 DIAS */}
             <SectionTitle emoji="📅" title="Próximos 7 días" sub="los 3 modelos"/>
-
-            {/* Day rows */}
             {isLoading ? (
               Array.from({length:7}).map((_,i)=>(
                 <div key={i} style={{height:56,background:"rgba(255,255,255,.04)",borderRadius:10,marginBottom:6,animation:"shimmer 1.4s ease infinite",animationDelay:`${i*.08}s`}}/>
               ))
             ) : (() => {
-              // Build day grid
               const days = data[MODELS[0].id]?.daily ?? [];
               return days.map((day, di) => (
                 <div key={di} style={{marginBottom:8,background:"rgba(255,255,255,.02)",border:"1px solid rgba(255,255,255,.05)",borderRadius:12,overflow:"hidden"}}>
-                  {/* Day header */}
                   <div style={{padding:"8px 14px",borderBottom:"1px solid rgba(255,255,255,.04)",display:"flex",alignItems:"center",gap:10}}>
-                    <span style={{fontFamily:"'Syne',sans-serif",fontSize:13,fontWeight:900,color:di===0?"#38BDF8":di===1?"#60A5FA":"#2e6b8a",minWidth:60}}>
+                    <span style={{fontFamily:"'Syne',sans-serif",fontSize:13,fontWeight:900,color:di===0?"#38BDF8":di===1?"#60A5FA":"#2e6b8a",minWidth:56}}>
                       {di===0?"Hoy":di===1?"Mañana":DAYS_ES[day.date.getDay()]}
                     </span>
-                    <span style={{color:"#0f2035",fontSize:10,fontFamily:"'DM Mono',monospace"}}>
-                      {day.date.getDate()} {MONTHS_ES[day.date.getMonth()]}
-                    </span>
-                    {data[MODELS[0].id]?.daily?.[di] && (
-                      <span style={{color:"#0f2035",fontSize:10,marginLeft:"auto",fontFamily:"'DM Mono',monospace"}}>
-                        ☀️{fmtTime(day.sunrise)} 🌙{fmtTime(day.sunset)}
-                      </span>
-                    )}
+                    <span style={{color:"#0f2035",fontSize:10,fontFamily:"'DM Mono',monospace"}}>{day.date.getDate()} {MONTHS_ES[day.date.getMonth()]}</span>
+                    <span style={{color:"#0f2035",fontSize:10,marginLeft:"auto",fontFamily:"'DM Mono',monospace"}}>☀️{fmtTime(day.sunrise)} 🌙{fmtTime(day.sunset)}</span>
                   </div>
-                  {/* 3 model columns */}
                   <div style={{display:"flex"}}>
                     {MODELS.map((m, mi) => {
                       const d = data[m.id]?.daily?.[di];
                       return (
-                        <div key={m.id} style={{flex:1,padding:"10px 10px",borderRight:mi<2?`1px solid rgba(255,255,255,.04)`:"none",background:mi===0?"rgba(96,165,250,.03)":mi===1?"rgba(56,189,248,.03)":"rgba(147,197,253,.03)"}}>
-                          {/* Model name */}
-                          <div style={{color:m.color,fontSize:9,fontWeight:700,fontFamily:"'DM Mono',monospace",marginBottom:6,textAlign:"center"}}>{m.name}</div>
+                        <div key={m.id} style={{flex:1,padding:"10px 8px",borderRight:mi<2?"1px solid rgba(255,255,255,.04)":"none",background:mi===0?"rgba(96,165,250,.03)":mi===1?"rgba(56,189,248,.03)":"rgba(147,197,253,.03)"}}>
+                          <div style={{color:m.color,fontSize:9,fontWeight:700,fontFamily:"'DM Mono',monospace",marginBottom:5,textAlign:"center"}}>{m.name}</div>
                           {!d ? <div style={{color:"#1e3a5f",fontSize:11,textAlign:"center"}}>—</div> : (
                             <div style={{textAlign:"center"}}>
-                              <div style={{fontSize:22,marginBottom:2}}>{d.info.icon}</div>
-                              <div style={{display:"flex",justifyContent:"center",alignItems:"baseline",gap:3,marginBottom:4}}>
-                                <span style={{fontFamily:"'Syne',sans-serif",fontSize:16,fontWeight:900,color:"#f0f9ff"}}>{d.tempMax}°</span>
-                                <span style={{color:"#1e4060",fontSize:12}}>/</span>
-                                <span style={{fontFamily:"'Syne',sans-serif",fontSize:13,fontWeight:700,color:"#2e6b8a"}}>{d.tempMin}°</span>
+                              <div style={{fontSize:20,marginBottom:2}}>{d.info.icon}</div>
+                              <div style={{display:"flex",justifyContent:"center",alignItems:"baseline",gap:2,marginBottom:4}}>
+                                <span style={{fontFamily:"'Syne',sans-serif",fontSize:15,fontWeight:900,color:"#f0f9ff"}}>{d.tempMax}°</span>
+                                <span style={{color:"#1e4060",fontSize:11}}>/</span>
+                                <span style={{fontFamily:"'Syne',sans-serif",fontSize:12,fontWeight:700,color:"#2e6b8a"}}>{d.tempMin}°</span>
                               </div>
                               <div style={{display:"flex",flexDirection:"column",gap:2}}>
-                                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                                  <span style={{fontSize:9,color:"#1e4060"}}>💧</span>
-                                  <span style={{color:"#bae6fd",fontSize:9,fontFamily:"'DM Mono',monospace"}}>{d.precipProb}%</span>
-                                </div>
-                                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                                  <span style={{fontSize:9,color:"#1e4060"}}>🌧️</span>
-                                  <span style={{color:"#bae6fd",fontSize:9,fontFamily:"'DM Mono',monospace"}}>{d.precip}mm</span>
-                                </div>
-                                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                                  <span style={{fontSize:9,color:"#1e4060"}}>💨</span>
-                                  <span style={{color:"#bae6fd",fontSize:9,fontFamily:"'DM Mono',monospace"}}>{d.wind}km/h</span>
-                                </div>
-                                {d.uv!=null&&(
-                                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                                    <span style={{fontSize:9,color:"#1e4060"}}>UV</span>
-                                    <span style={{color:"#bae6fd",fontSize:9,fontFamily:"'DM Mono',monospace"}}>{d.uv}</span>
+                                {[{e:"💧",v:`${d.precipProb}%`},{e:"🌧️",v:`${d.precip}mm`},{e:"💨",v:`${d.wind}km/h`}].map(({e,v})=>(
+                                  <div key={e} style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                                    <span style={{fontSize:9,color:"#1e4060"}}>{e}</span>
+                                    <span style={{color:"#bae6fd",fontSize:9,fontFamily:"'DM Mono',monospace"}}>{v}</span>
                                   </div>
-                                )}
+                                ))}
                               </div>
                             </div>
                           )}
