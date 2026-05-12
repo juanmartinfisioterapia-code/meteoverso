@@ -14,6 +14,10 @@ const WMO = {
 };
 const wmo = c => WMO[c] ?? WMO[Math.floor((c||0)/10)*10] ?? {icon:"🌡️",label:"Variable"};
 const windDir = d => ["N","NE","E","SE","S","SO","O","NO"][Math.round((d||0)/45)%8];
+const DAYS_ES = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
+const MONTHS_ES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+const fmtHour = d => `${String(d.getHours()).padStart(2,"0")}:00`;
+const fmtTime = s => s ? s.slice(11,16) : "—";
 
 const MODELS = [
   {id:"best",  name:"Mejor Modelo", badge:"RECOMENDADO", badgeC:"#60A5FA", color:"#60A5FA", bg:"rgba(96,165,250,.08)",  br:"rgba(96,165,250,.28)",  tag:"🇪🇸 Estaciones ES", res:"Auto", param:"best_match"},
@@ -34,8 +38,8 @@ async function fetchWeather(lat, lon, param) {
   const url =
     `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
     `&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,precipitation,surface_pressure,visibility,uv_index` +
-    `&hourly=temperature_2m,apparent_temperature,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_direction_10m,relative_humidity_2m,uv_index,visibility` +
-    `&daily=weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_direction_10m_dominant,uv_index_max,sunrise,sunset` +
+    `&hourly=temperature_2m,apparent_temperature,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_direction_10m,relative_humidity_2m,uv_index` +
+    `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_direction_10m_dominant,uv_index_max,sunrise,sunset` +
     `&wind_speed_unit=kmh&timezone=auto&models=${param}&forecast_days=7`;
   const r = await fetch(url);
   if (!r.ok) throw new Error("HTTP " + r.status);
@@ -43,7 +47,6 @@ async function fetchWeather(lat, lon, param) {
   if (!d.current) throw new Error("Sin datos");
   const c = d.current;
 
-  // Parse hourly — next 24 hours from now
   const now = new Date();
   const hourly = [];
   if (d.hourly?.time) {
@@ -60,14 +63,12 @@ async function fetchWeather(lat, lon, param) {
           windD: d.hourly.wind_direction_10m[i],
           humidity: d.hourly.relative_humidity_2m[i],
           uv: d.hourly.uv_index?.[i],
-          vis: d.hourly.visibility?.[i] != null ? +(d.hourly.visibility[i]/1000).toFixed(1) : null,
           info: wmo(d.hourly.weather_code[i]),
         });
       }
     }
   }
 
-  // Parse daily — 7 days
   const daily = [];
   if (d.daily?.time) {
     for (let i = 0; i < d.daily.time.length; i++) {
@@ -75,8 +76,6 @@ async function fetchWeather(lat, lon, param) {
         date: new Date(d.daily.time[i] + "T12:00:00"),
         tempMax: Math.round(d.daily.temperature_2m_max[i]),
         tempMin: Math.round(d.daily.temperature_2m_min[i]),
-        feelsMax: Math.round(d.daily.apparent_temperature_max[i]),
-        feelsMin: Math.round(d.daily.apparent_temperature_min[i]),
         precip: +(d.daily.precipitation_sum[i]||0).toFixed(1),
         precipProb: d.daily.precipitation_probability_max[i] ?? 0,
         wind: Math.round(d.daily.wind_speed_10m_max[i]),
@@ -121,11 +120,18 @@ function buildConsensus(data) {
   };
 }
 
-const DAYS_ES = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
-const MONTHS_ES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
-const fmtHour = d => `${String(d.getHours()).padStart(2,"0")}:00`;
-const fmtDay = d => `${DAYS_ES[d.getDay()]} ${d.getDate()} ${MONTHS_ES[d.getMonth()]}`;
-const fmtTime = s => s ? s.slice(11,16) : "—";
+// ─── Section header ───────────────────────────────────────────────────────────
+function SectionTitle({ emoji, title, sub }) {
+  return (
+    <div style={{marginBottom:14,paddingTop:28,borderTop:"1px solid rgba(255,255,255,.05)"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <span style={{fontSize:18}}>{emoji}</span>
+        <span style={{fontFamily:"'Syne',sans-serif",fontSize:18,fontWeight:900,color:"#f0f9ff"}}>{title}</span>
+        {sub && <span style={{color:"#1e4060",fontSize:12,fontFamily:"'DM Mono',monospace"}}>{sub}</span>}
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const [input,    setInput]    = useState("");
@@ -135,8 +141,6 @@ export default function App() {
   const [data,     setData]     = useState({});
   const [status,   setStatus]   = useState("idle");
   const [errMsg,   setErrMsg]   = useState("");
-  const [tab,      setTab]      = useState("ahora");    // ahora | horas | dias
-  const [selModel, setSelModel] = useState("best");     // for hourly/daily view
   const deb = useRef(null);
 
   useEffect(() => {
@@ -154,7 +158,6 @@ export default function App() {
     setData({});
     setStatus("loading");
     setErrMsg("");
-    setTab("ahora");
     const results = {};
     await Promise.all(MODELS.map(async m => {
       try   { results[m.id] = await fetchWeather(lat, lon, m.param); }
@@ -194,8 +197,6 @@ export default function App() {
 
   const con = buildConsensus(data);
   const isLoading = status === "loading" || status === "searching";
-  const curModel = MODELS.find(m => m.id === selModel);
-  const curData = data[selModel];
 
   return (
     <div style={{minHeight:"100vh",background:"#06101e",color:"#e2e8f0",fontFamily:"'DM Sans',system-ui,sans-serif",overflowX:"hidden"}}>
@@ -212,10 +213,7 @@ export default function App() {
         .drop-row:hover{background:rgba(56,189,248,.07)!important}
         .src-card{transition:transform .2s,box-shadow .2s}
         .src-card:hover{transform:translateY(-3px);box-shadow:0 12px 40px rgba(0,0,0,.4)}
-        .tab-btn{transition:all .18s;cursor:pointer;border:none;font-family:'DM Sans',sans-serif}
-        .model-btn{transition:all .15s;cursor:pointer;border:none;font-family:'DM Mono',monospace}
-        .hour-card{transition:background .15s}
-        .hour-card:hover{background:rgba(255,255,255,.05)!important}
+        .hour-pill:hover{background:rgba(255,255,255,.07)!important}
       `}</style>
 
       {/* BG */}
@@ -290,281 +288,229 @@ export default function App() {
           </div>
         )}
 
-        {/* RESULTS */}
+        {/* ══ RESULTS ══ */}
         {(isLoading || status==="done") && (
           <div style={{animation:"fadeUp .4s ease both"}}>
 
             {/* Location */}
             {loc && (
-              <div style={{textAlign:"center",marginBottom:18}}>
+              <div style={{textAlign:"center",marginBottom:22}}>
                 <div style={{color:"#0f2a42",fontSize:10,textTransform:"uppercase",letterSpacing:".14em",fontFamily:"'DM Mono',monospace",marginBottom:3}}>comparando para</div>
                 <div style={{fontFamily:"'Syne',sans-serif",fontSize:24,fontWeight:900,color:"#f0f9ff"}}>{loc.name}</div>
               </div>
             )}
 
-            {/* TABS */}
-            <div style={{display:"flex",gap:4,background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.07)",borderRadius:14,padding:4,marginBottom:18,maxWidth:340,margin:"0 auto 18px"}}>
-              {[{id:"ahora",label:"⚡ Ahora"},{id:"horas",label:"🕐 24 horas"},{id:"dias",label:"📅 7 días"}].map(t=>(
-                <button key={t.id} onClick={()=>setTab(t.id)} className="tab-btn"
-                  style={{flex:1,padding:"8px 6px",borderRadius:10,fontSize:12,fontWeight:600,background:tab===t.id?"rgba(56,189,248,.15)":"transparent",color:tab===t.id?"#38BDF8":"#1e4060",border:tab===t.id?"1px solid rgba(56,189,248,.3)":"1px solid transparent"}}>
-                  {t.label}
-                </button>
-              ))}
-            </div>
+            {/* ══ SECCIÓN 1: AHORA ══ */}
+            <SectionTitle emoji="⚡" title="Ahora mismo" sub="los 3 modelos"/>
 
-            {/* ── TAB: AHORA ── */}
-            {tab==="ahora" && (
-              <>
-                {/* Consensus */}
-                <div style={{background:"rgba(56,189,248,.04)",border:"1px solid rgba(56,189,248,.14)",borderRadius:18,padding:"20px",marginBottom:14}}>
-                  {isLoading&&!con?(
-                    <div style={{display:"flex",gap:20,flexWrap:"wrap",alignItems:"center"}}>
-                      <div style={{height:65,width:170,background:"rgba(255,255,255,.04)",borderRadius:10,animation:"shimmer 1.4s ease infinite"}}/>
-                      <div style={{flex:1}}>{[80,60,100,50].map((w,i)=><div key={i} style={{height:i===2?5:10,width:`${w}%`,background:"rgba(255,255,255,.04)",borderRadius:6,marginBottom:10,animation:"shimmer 1.4s ease infinite"}}/>)}</div>
-                    </div>
-                  ):con?(
-                    <div style={{display:"flex",gap:20,flexWrap:"wrap",alignItems:"center"}}>
-                      <div>
-                        <div style={{color:"#0f2a42",fontSize:9,textTransform:"uppercase",letterSpacing:".12em",fontFamily:"'DM Mono',monospace",marginBottom:5}}>Consenso · 3 modelos</div>
-                        <div style={{display:"flex",alignItems:"flex-end",gap:8,marginBottom:3}}>
-                          <span style={{fontSize:48}}>{con.info.icon}</span>
-                          <span style={{fontFamily:"'Syne',sans-serif",fontSize:54,fontWeight:900,color:"#f0f9ff",lineHeight:1}}>{con.temp}°C</span>
-                        </div>
-                        <div style={{color:"#2e6b8a",fontSize:12}}>{con.info.label}</div>
-                      </div>
-                      <div style={{flex:1,minWidth:170}}>
-                        <div style={{marginBottom:10}}>
-                          <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
-                            <span style={{color:"#1e4060",fontSize:11}}>Concordancia</span>
-                            <span style={{color:con.cColor,fontSize:11,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{con.cLabel}</span>
-                          </div>
-                          <div style={{background:"rgba(255,255,255,.06)",borderRadius:6,height:5,overflow:"hidden"}}>
-                            <div style={{width:`${con.conf}%`,height:"100%",background:con.cColor,borderRadius:6,transition:"width 1.2s ease"}}/>
-                          </div>
-                          <div style={{color:"#0f2035",fontSize:10,marginTop:3,fontFamily:"'DM Mono',monospace"}}>
-                            ±{con.spread}°C dispersión
-                            {con.spread===0&&<span style={{color:"#86EFAC",marginLeft:6}}>✓ Total acuerdo</span>}
-                            {con.spread>=3&&<span style={{color:"#FCA5A5",marginLeft:6}}>⚠ Alta incertidumbre</span>}
-                          </div>
-                        </div>
-                        <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
-                          {[{l:"Sensación",v:`${con.feels}°C`},{l:"Humedad",v:`${con.humidity}%`},{l:"Viento",v:`${con.wind}km/h`},{l:"Precip.",v:`${con.precip}mm`},{l:"Presión",v:`${con.pressure}hPa`}].map(({l,v})=>(
-                            <div key={l}>
-                              <div style={{color:"#0f2035",fontSize:9,textTransform:"uppercase",letterSpacing:".06em"}}>{l}</div>
-                              <div style={{color:"#e0f2fe",fontSize:13,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{v}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  ):null}
+            {/* Consensus bar */}
+            <div style={{background:"rgba(56,189,248,.04)",border:"1px solid rgba(56,189,248,.14)",borderRadius:16,padding:"18px 20px",marginBottom:14}}>
+              {isLoading&&!con?(
+                <div style={{display:"flex",gap:16,alignItems:"center"}}>
+                  <div style={{height:60,width:150,background:"rgba(255,255,255,.04)",borderRadius:10,animation:"shimmer 1.4s ease infinite"}}/>
+                  <div style={{flex:1}}>{[80,60,100,50].map((w,i)=><div key={i} style={{height:i===2?5:9,width:`${w}%`,background:"rgba(255,255,255,.04)",borderRadius:6,marginBottom:8,animation:"shimmer 1.4s ease infinite"}}/>)}</div>
                 </div>
-
-                {/* Source cards */}
-                <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:14}}>
-                  {MODELS.map(m=>{
-                    const d=data[m.id];
-                    return(
-                      <div key={m.id} className="src-card" style={{flex:"1 1 190px",minWidth:170,background:m.bg,border:`1px solid ${m.br}`,borderRadius:16,padding:"16px",position:"relative"}}>
-                        <div style={{position:"absolute",top:10,right:10,background:`${m.badgeC}18`,border:`1px solid ${m.badgeC}35`,borderRadius:20,padding:"2px 7px",fontSize:8,color:m.badgeC,fontFamily:"'DM Mono',monospace",fontWeight:700}}>{m.badge}</div>
-                        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:12}}>
-                          <span style={{background:`${m.color}20`,border:`1px solid ${m.br}`,borderRadius:7,padding:"3px 9px",color:m.color,fontSize:11,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{m.name}</span>
-                        </div>
-                        {isLoading?[52,38,68,55,60].map((w,i)=><div key={i} style={{height:9,width:`${w}%`,background:"rgba(255,255,255,.05)",borderRadius:5,marginBottom:7,animation:"shimmer 1.4s ease infinite",animationDelay:`${i*.1}s`}}/>)
-                        :!d?<div style={{color:"#1e3a5f",fontSize:12}}>Sin datos</div>
-                        :d.error?<div style={{color:"#FCA5A5",fontSize:11}}>⚠️ {d.error}</div>
-                        :(
-                          <>
-                            <div style={{display:"flex",alignItems:"flex-end",gap:6,marginBottom:3}}>
-                              <span style={{fontSize:38,lineHeight:1}}>{d.info.icon}</span>
-                              <span style={{fontFamily:"'Syne',sans-serif",fontSize:42,fontWeight:900,color:"#f0f9ff",lineHeight:1}}>{d.temp}°</span>
-                            </div>
-                            <div style={{color:m.color,fontSize:11,fontWeight:600,marginBottom:12}}>{d.info.label}</div>
-                            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"6px 8px"}}>
-                              {[{l:"Sensación",v:`${d.feels}°`},{l:"Humedad",v:`${d.humidity}%`},{l:"Viento",v:`${d.wind}km/h ${windDir(d.windD)}`},{l:"Precip.",v:`${d.precip}mm`},{l:"Presión",v:`${d.pressure}hPa`},{l:"Visib.",v:d.vis!=null?`${d.vis}km`:"—"}].map(({l,v})=>(
-                                <div key={l}>
-                                  <div style={{color:"#0f2035",fontSize:9,textTransform:"uppercase",letterSpacing:".04em",marginBottom:1}}>{l}</div>
-                                  <div style={{color:"#bae6fd",fontSize:11,fontWeight:600,fontFamily:"'DM Mono',monospace"}}>{v}</div>
-                                </div>
-                              ))}
-                            </div>
-                          </>
-                        )}
-                        <div style={{position:"absolute",bottom:9,right:11,color:"#0f2035",fontSize:9,fontFamily:"'DM Mono',monospace"}}>{m.res}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Comparison table */}
-                {status==="done"&&con&&(
-                  <div style={{background:"rgba(255,255,255,.02)",border:"1px solid rgba(56,189,248,.1)",borderRadius:12,overflow:"hidden",marginBottom:14}}>
-                    <div style={{padding:"10px 16px",borderBottom:"1px solid rgba(255,255,255,.04)"}}>
-                      <span style={{color:"#0f2a42",fontSize:10,textTransform:"uppercase",letterSpacing:".08em",fontFamily:"'DM Mono',monospace"}}>Comparativa · ↑ más alto · ↓ más bajo</span>
+              ):con?(
+                <div style={{display:"flex",gap:18,flexWrap:"wrap",alignItems:"center"}}>
+                  <div>
+                    <div style={{color:"#0f2a42",fontSize:9,textTransform:"uppercase",letterSpacing:".1em",fontFamily:"'DM Mono',monospace",marginBottom:4}}>Consenso</div>
+                    <div style={{display:"flex",alignItems:"flex-end",gap:7,marginBottom:2}}>
+                      <span style={{fontSize:44}}>{con.info.icon}</span>
+                      <span style={{fontFamily:"'Syne',sans-serif",fontSize:50,fontWeight:900,color:"#f0f9ff",lineHeight:1}}>{con.temp}°C</span>
                     </div>
-                    <div style={{overflowX:"auto"}}>
-                      <table style={{width:"100%",borderCollapse:"collapse",minWidth:340}}>
-                        <thead>
-                          <tr style={{background:"rgba(255,255,255,.01)"}}>
-                            <td style={{padding:"7px 16px",color:"#0f2035",fontSize:9,textTransform:"uppercase",letterSpacing:".07em",fontFamily:"'DM Mono',monospace"}}>Parámetro</td>
-                            {MODELS.map(m=>(
-                              <td key={m.id} style={{padding:"7px 8px",textAlign:"center"}}>
-                                <span style={{background:`${m.color}20`,color:m.color,fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:5,fontFamily:"'DM Mono',monospace",border:`1px solid ${m.br}`}}>{m.name}</span>
-                              </td>
-                            ))}
-                            <td style={{padding:"7px 8px",textAlign:"center"}}>
-                              <span style={{background:"rgba(255,255,255,.05)",color:"#2e6b8a",fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:5,fontFamily:"'DM Mono',monospace"}}>MEDIA</span>
-                            </td>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {[{k:"temp",l:"Temp.",u:"°C"},{k:"feels",l:"Sensación",u:"°C"},{k:"humidity",l:"Humedad",u:"%"},{k:"wind",l:"Viento",u:"km/h"},{k:"precip",l:"Precip.",u:"mm"},{k:"pressure",l:"Presión",u:"hPa"},{k:"vis",l:"Visib.",u:"km"}].map(({k,l,u},ri)=>{
-                            const vals=MODELS.map(m=>data[m.id]?.[k]).filter(v=>v!=null&&!isNaN(v));
-                            const mn=vals.length?Math.min(...vals):null,mx=vals.length?Math.max(...vals):null;
-                            const av=vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):null;
-                            return(
-                              <tr key={k} style={{background:ri%2?"rgba(255,255,255,.01)":"transparent",borderTop:"1px solid rgba(255,255,255,.03)"}}>
-                                <td style={{padding:"8px 16px",color:"#2e6b8a",fontSize:12}}>{l}</td>
-                                {MODELS.map(m=>{
-                                  const v=data[m.id]?.[k];
-                                  const hi=v!=null&&v===mx&&mn!==mx,lo=v!=null&&v===mn&&mn!==mx;
-                                  return(
-                                    <td key={m.id} style={{padding:"8px 8px",textAlign:"center"}}>
-                                      {v!=null?<span style={{fontFamily:"'DM Mono',monospace",fontSize:12,color:hi?"#FCD34D":lo?"#86EFAC":"#bae6fd",fontWeight:hi||lo?700:400}}>{v}{u}{hi?"↑":lo?"↓":""}</span>:<span style={{color:"#0f2035"}}>—</span>}
-                                    </td>
-                                  );
-                                })}
-                                <td style={{padding:"8px 8px",textAlign:"center"}}>
-                                  <span style={{fontFamily:"'DM Mono',monospace",fontSize:12,color:"#1e4060"}}>{av!=null?`${av}${u}`:"—"}</span>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                    <div style={{color:"#2e6b8a",fontSize:12}}>{con.info.label}</div>
                   </div>
-                )}
-              </>
-            )}
-
-            {/* ── TAB: HORAS ── */}
-            {tab==="horas" && (
-              <div>
-                {/* Model selector */}
-                <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
-                  {MODELS.map(m=>(
-                    <button key={m.id} onClick={()=>setSelModel(m.id)} className="model-btn"
-                      style={{padding:"6px 14px",borderRadius:20,fontSize:11,fontWeight:700,background:selModel===m.id?`${m.color}22`:"rgba(255,255,255,.03)",color:selModel===m.id?m.color:"#1e4060",border:selModel===m.id?`1px solid ${m.br}`:"1px solid rgba(255,255,255,.07)"}}>
-                      {m.name}
-                    </button>
-                  ))}
-                </div>
-
-                {isLoading?(
-                  <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:8}}>
-                    {Array.from({length:8}).map((_,i)=>(
-                      <div key={i} style={{flexShrink:0,width:90,height:160,background:"rgba(255,255,255,.04)",borderRadius:12,animation:"shimmer 1.4s ease infinite",animationDelay:`${i*.08}s`}}/>
-                    ))}
-                  </div>
-                ):curData?.hourly?.length>0?(
-                  <div style={{overflowX:"auto",paddingBottom:8}}>
-                    <div style={{display:"flex",gap:8,minWidth:"max-content"}}>
-                      {curData.hourly.map((h,i)=>(
-                        <div key={i} className="hour-card" style={{flexShrink:0,width:88,background:"rgba(255,255,255,.03)",border:`1px solid ${curModel.br}`,borderRadius:12,padding:"12px 8px",textAlign:"center",cursor:"default"}}>
-                          <div style={{color:"#1e4060",fontSize:10,fontFamily:"'DM Mono',monospace",marginBottom:6}}>{fmtHour(h.time)}</div>
-                          <div style={{fontSize:24,marginBottom:4}}>{h.info.icon}</div>
-                          <div style={{fontFamily:"'Syne',sans-serif",fontSize:20,fontWeight:900,color:"#f0f9ff",marginBottom:2}}>{h.temp}°</div>
-                          <div style={{color:curModel.color,fontSize:9,marginBottom:8}}>{h.info.label}</div>
-                          <div style={{display:"flex",flexDirection:"column",gap:4}}>
-                            {[
-                              {l:"💧",v:`${h.precipProb}%`},
-                              {l:"🌧️",v:`${h.precip}mm`},
-                              {l:"💨",v:`${h.wind}km/h`},
-                              {l:"💦",v:`${h.humidity}%`},
-                            ].map(({l,v})=>(
-                              <div key={l} style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                                <span style={{fontSize:10}}>{l}</span>
-                                <span style={{color:"#bae6fd",fontSize:10,fontFamily:"'DM Mono',monospace",fontWeight:600}}>{v}</span>
-                              </div>
-                            ))}
-                          </div>
+                  <div style={{flex:1,minWidth:160}}>
+                    <div style={{marginBottom:10}}>
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                        <span style={{color:"#1e4060",fontSize:11}}>Concordancia modelos</span>
+                        <span style={{color:con.cColor,fontSize:11,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{con.cLabel}</span>
+                      </div>
+                      <div style={{background:"rgba(255,255,255,.06)",borderRadius:6,height:5,overflow:"hidden"}}>
+                        <div style={{width:`${con.conf}%`,height:"100%",background:con.cColor,borderRadius:6,transition:"width 1.2s ease"}}/>
+                      </div>
+                      <div style={{color:"#0f2035",fontSize:10,marginTop:3,fontFamily:"'DM Mono',monospace"}}>
+                        ±{con.spread}°C dispersión
+                        {con.spread===0&&<span style={{color:"#86EFAC",marginLeft:6}}>✓ Total acuerdo</span>}
+                        {con.spread>=3&&<span style={{color:"#FCA5A5",marginLeft:6}}>⚠ Alta incertidumbre</span>}
+                      </div>
+                    </div>
+                    <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+                      {[{l:"Sensación",v:`${con.feels}°C`},{l:"Humedad",v:`${con.humidity}%`},{l:"Viento",v:`${con.wind}km/h`},{l:"Precip.",v:`${con.precip}mm`}].map(({l,v})=>(
+                        <div key={l}>
+                          <div style={{color:"#0f2035",fontSize:9,textTransform:"uppercase",letterSpacing:".05em"}}>{l}</div>
+                          <div style={{color:"#e0f2fe",fontSize:13,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{v}</div>
                         </div>
                       ))}
                     </div>
                   </div>
-                ):(
-                  <div style={{color:"#1e4060",fontSize:13,textAlign:"center",padding:"20px"}}>Sin datos horarios</div>
-                )}
-              </div>
-            )}
-
-            {/* ── TAB: DÍAS ── */}
-            {tab==="dias" && (
-              <div>
-                {/* Model selector */}
-                <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
-                  {MODELS.map(m=>(
-                    <button key={m.id} onClick={()=>setSelModel(m.id)} className="model-btn"
-                      style={{padding:"6px 14px",borderRadius:20,fontSize:11,fontWeight:700,background:selModel===m.id?`${m.color}22`:"rgba(255,255,255,.03)",color:selModel===m.id?m.color:"#1e4060",border:selModel===m.id?`1px solid ${m.br}`:"1px solid rgba(255,255,255,.07)"}}>
-                      {m.name}
-                    </button>
-                  ))}
                 </div>
+              ):null}
+            </div>
 
-                {isLoading?(
-                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                    {Array.from({length:7}).map((_,i)=>(
-                      <div key={i} style={{height:64,background:"rgba(255,255,255,.04)",borderRadius:12,animation:"shimmer 1.4s ease infinite",animationDelay:`${i*.08}s`}}/>
-                    ))}
-                  </div>
-                ):curData?.daily?.length>0?(
-                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                    {curData.daily.map((d,i)=>(
-                      <div key={i} style={{background:"rgba(255,255,255,.03)",border:`1px solid ${curModel.br}`,borderRadius:12,padding:"12px 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-                        {/* Day */}
-                        <div style={{minWidth:80}}>
-                          <div style={{color:i===0?"#38BDF8":"#1e4060",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".05em"}}>
-                            {i===0?"Hoy":i===1?"Mañana":DAYS_ES[d.date.getDay()]}
-                          </div>
-                          <div style={{color:"#0f2035",fontSize:10}}>{d.date.getDate()} {MONTHS_ES[d.date.getMonth()]}</div>
+            {/* 3 current cards */}
+            <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:8}}>
+              {MODELS.map(m=>{
+                const d=data[m.id];
+                return(
+                  <div key={m.id} className="src-card" style={{flex:"1 1 190px",minWidth:170,background:m.bg,border:`1px solid ${m.br}`,borderRadius:14,padding:"16px",position:"relative"}}>
+                    <div style={{position:"absolute",top:10,right:10,background:`${m.badgeC}18`,border:`1px solid ${m.badgeC}35`,borderRadius:20,padding:"2px 7px",fontSize:8,color:m.badgeC,fontFamily:"'DM Mono',monospace",fontWeight:700}}>{m.badge}</div>
+                    <div style={{marginBottom:10}}>
+                      <span style={{background:`${m.color}20`,border:`1px solid ${m.br}`,borderRadius:7,padding:"3px 9px",color:m.color,fontSize:11,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{m.name}</span>
+                      <span style={{color:"#1e3a5f",fontSize:10,marginLeft:6}}>{m.tag}</span>
+                    </div>
+                    {isLoading?[52,38,68,55].map((w,i)=><div key={i} style={{height:9,width:`${w}%`,background:"rgba(255,255,255,.05)",borderRadius:5,marginBottom:7,animation:"shimmer 1.4s ease infinite",animationDelay:`${i*.1}s`}}/>)
+                    :!d?<div style={{color:"#1e3a5f",fontSize:12}}>Sin datos</div>
+                    :d.error?<div style={{color:"#FCA5A5",fontSize:11}}>⚠️ {d.error}</div>
+                    :(
+                      <>
+                        <div style={{display:"flex",alignItems:"flex-end",gap:6,marginBottom:2}}>
+                          <span style={{fontSize:36,lineHeight:1}}>{d.info.icon}</span>
+                          <span style={{fontFamily:"'Syne',sans-serif",fontSize:40,fontWeight:900,color:"#f0f9ff",lineHeight:1}}>{d.temp}°</span>
                         </div>
-                        {/* Icon + condition */}
-                        <div style={{display:"flex",alignItems:"center",gap:8,minWidth:120}}>
-                          <span style={{fontSize:28}}>{d.info.icon}</span>
-                          <div>
-                            <div style={{color:curModel.color,fontSize:11,fontWeight:600}}>{d.info.label}</div>
-                            <div style={{color:"#0f2035",fontSize:10}}>☀️ {fmtTime(d.sunrise)} · 🌙 {fmtTime(d.sunset)}</div>
-                          </div>
-                        </div>
-                        {/* Temps */}
-                        <div style={{display:"flex",alignItems:"center",gap:6}}>
-                          <span style={{fontFamily:"'Syne',sans-serif",fontSize:22,fontWeight:900,color:"#f0f9ff"}}>{d.tempMax}°</span>
-                          <span style={{color:"#1e4060",fontSize:14,fontFamily:"'DM Mono',monospace"}}>/</span>
-                          <span style={{fontFamily:"'Syne',sans-serif",fontSize:18,fontWeight:700,color:"#2e6b8a"}}>{d.tempMin}°</span>
-                        </div>
-                        {/* Details */}
-                        <div style={{display:"flex",gap:12,flexWrap:"wrap",marginLeft:"auto"}}>
-                          {[
-                            {l:"💧",v:`${d.precipProb}%`},
-                            {l:"🌧️",v:`${d.precip}mm`},
-                            {l:"💨",v:`${d.wind}km/h ${windDir(d.windD)}`},
-                            {l:"☀️UV",v:d.uv!=null?d.uv:"—"},
-                          ].map(({l,v})=>(
-                            <div key={l} style={{textAlign:"center"}}>
-                              <div style={{color:"#0f2035",fontSize:9}}>{l}</div>
+                        <div style={{color:m.color,fontSize:11,fontWeight:600,marginBottom:10}}>{d.info.label}</div>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"5px 8px"}}>
+                          {[{l:"Sensación",v:`${d.feels}°`},{l:"Humedad",v:`${d.humidity}%`},{l:"Viento",v:`${d.wind}km/h ${windDir(d.windD)}`},{l:"Precip.",v:`${d.precip}mm`},{l:"Presión",v:`${d.pressure}hPa`},{l:"Visib.",v:d.vis!=null?`${d.vis}km`:"—"}].map(({l,v})=>(
+                            <div key={l}>
+                              <div style={{color:"#0f2035",fontSize:9,textTransform:"uppercase",letterSpacing:".04em",marginBottom:1}}>{l}</div>
                               <div style={{color:"#bae6fd",fontSize:11,fontWeight:600,fontFamily:"'DM Mono',monospace"}}>{v}</div>
                             </div>
                           ))}
                         </div>
-                      </div>
-                    ))}
+                      </>
+                    )}
+                    <div style={{position:"absolute",bottom:9,right:11,color:"#0f2035",fontSize:9,fontFamily:"'DM Mono',monospace"}}>{m.res}</div>
                   </div>
-                ):(
-                  <div style={{color:"#1e4060",fontSize:13,textAlign:"center",padding:"20px"}}>Sin datos diarios</div>
-                )}
-              </div>
-            )}
+                );
+              })}
+            </div>
+
+            {/* ══ SECCIÓN 2: 24 HORAS ══ */}
+            <SectionTitle emoji="🕐" title="Próximas 24 horas" sub="scroll →"/>
+
+            {MODELS.map(m => {
+              const d = data[m.id];
+              return (
+                <div key={m.id} style={{marginBottom:12}}>
+                  {/* Model label */}
+                  <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:8}}>
+                    <span style={{background:`${m.color}20`,border:`1px solid ${m.br}`,borderRadius:7,padding:"3px 10px",color:m.color,fontSize:11,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{m.name}</span>
+                    <span style={{color:"#1e3a5f",fontSize:10}}>{m.tag}</span>
+                  </div>
+                  {/* Horizontal scroll strip */}
+                  <div style={{overflowX:"auto",paddingBottom:6}}>
+                    <div style={{display:"flex",gap:6,minWidth:"max-content"}}>
+                      {isLoading ? (
+                        Array.from({length:8}).map((_,i)=>(
+                          <div key={i} style={{flexShrink:0,width:72,height:140,background:"rgba(255,255,255,.04)",borderRadius:10,animation:"shimmer 1.4s ease infinite",animationDelay:`${i*.08}s`}}/>
+                        ))
+                      ) : d?.hourly?.length > 0 ? (
+                        d.hourly.map((h,i)=>(
+                          <div key={i} className="hour-pill" style={{flexShrink:0,width:72,background:m.bg,border:`1px solid ${m.br}`,borderRadius:10,padding:"10px 6px",textAlign:"center",transition:"background .15s"}}>
+                            <div style={{color:"#1e4060",fontSize:9,fontFamily:"'DM Mono',monospace",marginBottom:5}}>{fmtHour(h.time)}</div>
+                            <div style={{fontSize:22,marginBottom:3}}>{h.info.icon}</div>
+                            <div style={{fontFamily:"'Syne',sans-serif",fontSize:18,fontWeight:900,color:"#f0f9ff",marginBottom:6}}>{h.temp}°</div>
+                            <div style={{display:"flex",flexDirection:"column",gap:3}}>
+                              <div style={{display:"flex",justifyContent:"space-between"}}>
+                                <span style={{fontSize:9,color:"#1e4060"}}>💧</span>
+                                <span style={{color:"#bae6fd",fontSize:9,fontFamily:"'DM Mono',monospace"}}>{h.precipProb}%</span>
+                              </div>
+                              <div style={{display:"flex",justifyContent:"space-between"}}>
+                                <span style={{fontSize:9,color:"#1e4060"}}>🌧️</span>
+                                <span style={{color:"#bae6fd",fontSize:9,fontFamily:"'DM Mono',monospace"}}>{h.precip}mm</span>
+                              </div>
+                              <div style={{display:"flex",justifyContent:"space-between"}}>
+                                <span style={{fontSize:9,color:"#1e4060"}}>💨</span>
+                                <span style={{color:"#bae6fd",fontSize:9,fontFamily:"'DM Mono',monospace"}}>{h.wind}km</span>
+                              </div>
+                              <div style={{display:"flex",justifyContent:"space-between"}}>
+                                <span style={{fontSize:9,color:"#1e4060"}}>💦</span>
+                                <span style={{color:"#bae6fd",fontSize:9,fontFamily:"'DM Mono',monospace"}}>{h.humidity}%</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div style={{color:"#1e4060",fontSize:12,padding:"10px"}}>Sin datos horarios</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* ══ SECCIÓN 3: 7 DÍAS ══ */}
+            <SectionTitle emoji="📅" title="Próximos 7 días" sub="los 3 modelos"/>
+
+            {/* Day rows */}
+            {isLoading ? (
+              Array.from({length:7}).map((_,i)=>(
+                <div key={i} style={{height:56,background:"rgba(255,255,255,.04)",borderRadius:10,marginBottom:6,animation:"shimmer 1.4s ease infinite",animationDelay:`${i*.08}s`}}/>
+              ))
+            ) : (() => {
+              // Build day grid
+              const days = data[MODELS[0].id]?.daily ?? [];
+              return days.map((day, di) => (
+                <div key={di} style={{marginBottom:8,background:"rgba(255,255,255,.02)",border:"1px solid rgba(255,255,255,.05)",borderRadius:12,overflow:"hidden"}}>
+                  {/* Day header */}
+                  <div style={{padding:"8px 14px",borderBottom:"1px solid rgba(255,255,255,.04)",display:"flex",alignItems:"center",gap:10}}>
+                    <span style={{fontFamily:"'Syne',sans-serif",fontSize:13,fontWeight:900,color:di===0?"#38BDF8":di===1?"#60A5FA":"#2e6b8a",minWidth:60}}>
+                      {di===0?"Hoy":di===1?"Mañana":DAYS_ES[day.date.getDay()]}
+                    </span>
+                    <span style={{color:"#0f2035",fontSize:10,fontFamily:"'DM Mono',monospace"}}>
+                      {day.date.getDate()} {MONTHS_ES[day.date.getMonth()]}
+                    </span>
+                    {data[MODELS[0].id]?.daily?.[di] && (
+                      <span style={{color:"#0f2035",fontSize:10,marginLeft:"auto",fontFamily:"'DM Mono',monospace"}}>
+                        ☀️{fmtTime(day.sunrise)} 🌙{fmtTime(day.sunset)}
+                      </span>
+                    )}
+                  </div>
+                  {/* 3 model columns */}
+                  <div style={{display:"flex"}}>
+                    {MODELS.map((m, mi) => {
+                      const d = data[m.id]?.daily?.[di];
+                      return (
+                        <div key={m.id} style={{flex:1,padding:"10px 10px",borderRight:mi<2?`1px solid rgba(255,255,255,.04)`:"none",background:mi===0?"rgba(96,165,250,.03)":mi===1?"rgba(56,189,248,.03)":"rgba(147,197,253,.03)"}}>
+                          {/* Model name */}
+                          <div style={{color:m.color,fontSize:9,fontWeight:700,fontFamily:"'DM Mono',monospace",marginBottom:6,textAlign:"center"}}>{m.name}</div>
+                          {!d ? <div style={{color:"#1e3a5f",fontSize:11,textAlign:"center"}}>—</div> : (
+                            <div style={{textAlign:"center"}}>
+                              <div style={{fontSize:22,marginBottom:2}}>{d.info.icon}</div>
+                              <div style={{display:"flex",justifyContent:"center",alignItems:"baseline",gap:3,marginBottom:4}}>
+                                <span style={{fontFamily:"'Syne',sans-serif",fontSize:16,fontWeight:900,color:"#f0f9ff"}}>{d.tempMax}°</span>
+                                <span style={{color:"#1e4060",fontSize:12}}>/</span>
+                                <span style={{fontFamily:"'Syne',sans-serif",fontSize:13,fontWeight:700,color:"#2e6b8a"}}>{d.tempMin}°</span>
+                              </div>
+                              <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                                  <span style={{fontSize:9,color:"#1e4060"}}>💧</span>
+                                  <span style={{color:"#bae6fd",fontSize:9,fontFamily:"'DM Mono',monospace"}}>{d.precipProb}%</span>
+                                </div>
+                                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                                  <span style={{fontSize:9,color:"#1e4060"}}>🌧️</span>
+                                  <span style={{color:"#bae6fd",fontSize:9,fontFamily:"'DM Mono',monospace"}}>{d.precip}mm</span>
+                                </div>
+                                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                                  <span style={{fontSize:9,color:"#1e4060"}}>💨</span>
+                                  <span style={{color:"#bae6fd",fontSize:9,fontFamily:"'DM Mono',monospace"}}>{d.wind}km/h</span>
+                                </div>
+                                {d.uv!=null&&(
+                                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                                    <span style={{fontSize:9,color:"#1e4060"}}>UV</span>
+                                    <span style={{color:"#bae6fd",fontSize:9,fontFamily:"'DM Mono',monospace"}}>{d.uv}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ));
+            })()}
 
           </div>
         )}
