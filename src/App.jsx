@@ -20,9 +20,9 @@ const fmtHour = d => `${String(d.getHours()).padStart(2,"0")}:00`;
 const fmtTime = s => s ? s.slice(11,16) : "—";
 
 const MODELS = [
-  {id:"best",  name:"Mejor Modelo", badge:"RECOMENDADO", badgeC:"#60A5FA", color:"#60A5FA", bg:"rgba(96,165,250,.08)",  br:"rgba(96,165,250,.28)",  tag:"🇪🇸 Estaciones ES", res:"Auto", param:"best_match"},
-  {id:"ecmwf", name:"ECMWF",        badge:"EL TIEMPO.ES",badgeC:"#38BDF8", color:"#38BDF8", bg:"rgba(56,189,248,.07)",  br:"rgba(56,189,248,.25)",  tag:"🇪🇺 Europa 9km",   res:"9 km",  param:"ecmwf_ifs025"},
-  {id:"icon",  name:"ICON-EU",      badge:"ALTA RES.",   badgeC:"#93C5FD", color:"#93C5FD", bg:"rgba(147,197,253,.07)", br:"rgba(147,197,253,.22)", tag:"🇩🇪 Alemania 2km", res:"2 km",  param:"icon_seamless"},
+  {id:"best",  name:"Meteoverso",    badge:"RECOMENDADO", badgeC:"#60A5FA", color:"#60A5FA", bg:"rgba(96,165,250,.08)",  br:"rgba(96,165,250,.28)",  tag:"🇪🇸 Mejor para España", res:"Auto", param:"best_match"},
+  {id:"ecmwf", name:"El Tiempo.es",  badge:"ECMWF",       badgeC:"#38BDF8", color:"#38BDF8", bg:"rgba(56,189,248,.07)",  br:"rgba(56,189,248,.25)",  tag:"🇪🇺 Modelo Europeo",   res:"9 km",  param:"ecmwf_ifs025"},
+  {id:"icon",  name:"Windy.com",     badge:"ICON-EU",      badgeC:"#93C5FD", color:"#93C5FD", bg:"rgba(147,197,253,.07)", br:"rgba(147,197,253,.22)", tag:"🇩🇪 Modelo Alemán",    res:"2 km",  param:"icon_seamless"},
 ];
 
 const CITIES = ["Madrid","Barcelona","Sevilla","Valencia","Bilbao","Málaga","Zaragoza","Palma","Tenerife","A Coruña"];
