@@ -142,6 +142,36 @@ export default function App() {
   const [status,   setStatus]   = useState("idle");
   const [errMsg,   setErrMsg]   = useState("");
   const deb = useRef(null);
+  const [geoLoading, setGeoLoading] = useState(false);
+
+  const useGeo = () => {
+    if (!navigator.geolocation) { setErrMsg("Tu navegador no soporta geolocalización"); return; }
+    setGeoLoading(true);
+    setErrMsg("");
+    navigator.geolocation.getCurrentPosition(
+      async pos => {
+        const { latitude: lat, longitude: lon } = pos.coords;
+        try {
+          const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=a&latitude=${lat}&longitude=${lon}&count=1&language=es&format=json`);
+          const d = await r.json();
+          const name = d.results?.[0]?.name ?? "Tu ubicación";
+          setInput(name);
+          setGeoLoading(false);
+          runModels(lat, lon, name);
+        } catch {
+          setInput("Tu ubicación");
+          setGeoLoading(false);
+          runModels(lat, lon, "Tu ubicación");
+        }
+      },
+      err => {
+        setGeoLoading(false);
+        if (err.code === 1) setErrMsg("Permiso denegado. Busca tu ciudad manualmente.");
+        else setErrMsg("No se pudo obtener tu ubicación.");
+      },
+      { timeout: 10000 }
+    );
+  };
 
   useEffect(() => {
     if (input.length < 2) { setDrops([]); setShowDrop(false); return; }
@@ -240,6 +270,26 @@ export default function App() {
 
         {/* SEARCH */}
         <div style={{position:"relative",maxWidth:560,margin:"0 auto 22px",animation:"fadeUp .5s ease .08s both"}}>
+          {/* Geolocation button */}
+          <button onClick={useGeo} disabled={isLoading||geoLoading}
+            style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"linear-gradient(135deg,rgba(56,189,248,.12),rgba(96,165,250,.12))",border:"1px solid rgba(56,189,248,.3)",borderRadius:12,padding:"11px",marginBottom:8,cursor:isLoading||geoLoading?"not-allowed":"pointer",transition:"all .2s",opacity:isLoading||geoLoading?.6:1}}
+            onMouseEnter={e=>{if(!isLoading&&!geoLoading){e.currentTarget.style.background="linear-gradient(135deg,rgba(56,189,248,.2),rgba(96,165,250,.2))";e.currentTarget.style.borderColor="rgba(56,189,248,.6)";}}}
+            onMouseLeave={e=>{e.currentTarget.style.background="linear-gradient(135deg,rgba(56,189,248,.12),rgba(96,165,250,.12))";e.currentTarget.style.borderColor="rgba(56,189,248,.3)";}}>
+            {geoLoading
+              ? <div style={{width:14,height:14,border:"2px solid rgba(56,189,248,.3)",borderTopColor:"#38BDF8",borderRadius:"50%",animation:"spin .7s linear infinite"}}/>
+              : <span style={{fontSize:16}}>📍</span>
+            }
+            <span style={{color:"#38BDF8",fontSize:13,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
+              {geoLoading?"Detectando ubicación...":"Usar mi ubicación"}
+            </span>
+          </button>
+
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+            <div style={{flex:1,height:1,background:"rgba(255,255,255,.06)"}}/>
+            <span style={{color:"#1e3a5f",fontSize:11,fontFamily:"'DM Mono',monospace"}}>o busca</span>
+            <div style={{flex:1,height:1,background:"rgba(255,255,255,.06)"}}/>
+          </div>
+
           <div style={{display:"flex",gap:8,background:"rgba(255,255,255,.04)",border:"1px solid rgba(56,189,248,.25)",borderRadius:16,padding:"7px 7px 7px 16px",alignItems:"center",transition:"border-color .2s,box-shadow .2s"}}
             onFocusCapture={e=>{e.currentTarget.style.borderColor="rgba(56,189,248,.6)";e.currentTarget.style.boxShadow="0 0 0 3px rgba(56,189,248,.1)";}}
             onBlurCapture={e=>{e.currentTarget.style.borderColor="rgba(56,189,248,.25)";e.currentTarget.style.boxShadow="none";}}
