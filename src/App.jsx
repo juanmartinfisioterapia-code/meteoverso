@@ -368,7 +368,7 @@ export default function App() {
 
           {/* Dropdown */}
           {showDrop && drops.length > 0 && !isLoading && (
-            <div style={{position:"absolute",top:"calc(100% + 5px)",left:0,right:0,background:"#0a1628",border:"1px solid rgba(56,189,248,.2)",borderRadius:12,overflow:"hidden",zIndex:300,boxShadow:"0 20px 60px rgba(0,0,0,.9)"}}>
+            <div style={{position:"absolute",top:"calc(100% + 5px)",left:0,right:0,background:"#0d1f35",border:"1px solid rgba(56,189,248,.35)",borderRadius:12,overflow:"hidden",zIndex:300,boxShadow:"0 20px 60px rgba(0,0,0,.95)",backdropFilter:"blur(20px)"}}>
               {drops.slice(0,5).map((c,i)=>(
                 <button key={i} onClick={()=>pick(c)} className="drop-row"
                   style={{width:"100%",textAlign:"left",background:"transparent",border:"none",borderBottom:i<4?"1px solid rgba(255,255,255,.04)":"none",padding:"11px 16px",cursor:"pointer",color:"#e2e8f0",fontSize:14,fontFamily:"'DM Sans',sans-serif",display:"flex",gap:8,alignItems:"center",transition:"background .12s"}}>
