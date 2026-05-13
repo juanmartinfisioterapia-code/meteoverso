@@ -299,7 +299,7 @@ export default function App() {
         @keyframes twinkle{0%,100%{opacity:.12}50%{opacity:.6}}
         @keyframes fadeIn{from{opacity:0}to{opacity:1}}
         .city-pill:hover{background:rgba(56,189,248,.12)!important;color:#38BDF8!important;border-color:rgba(56,189,248,.3)!important}
-        .drop-row:hover{background:rgba(56,189,248,.07)!important}
+        .drop-row:hover{background:#f0f9ff!important}
         .src-card{transition:transform .2s,box-shadow .2s}
         .src-card:hover{transform:translateY(-3px);box-shadow:0 12px 40px rgba(0,0,0,.4)}
         .hour-pill:hover{background:rgba(255,255,255,.07)!important}
@@ -368,14 +368,14 @@ export default function App() {
 
           {/* Dropdown */}
           {showDrop && drops.length > 0 && !isLoading && (
-            <div style={{position:"absolute",top:"calc(100% + 5px)",left:0,right:0,background:"#000d1a",border:"2px solid #38BDF8",borderRadius:12,overflow:"hidden",zIndex:9999,boxShadow:"0 24px 64px #000000",isolation:"isolate"}}>
+            <div style={{position:"absolute",top:"calc(100% + 5px)",left:0,right:0,background:"#ffffff",border:"none",borderRadius:12,overflow:"hidden",zIndex:9999,boxShadow:"0 8px 32px rgba(0,0,0,.5)"}}>
               {drops.slice(0,5).map((c,i)=>(
                 <button key={i} onClick={()=>pick(c)} className="drop-row"
-                  style={{width:"100%",textAlign:"left",background:"#000d1a",border:"none",borderBottom:i<4?"1px solid rgba(56,189,248,.15)":"none",padding:"11px 16px",cursor:"pointer",color:"#e2e8f0",fontSize:14,fontFamily:"'DM Sans',sans-serif",display:"flex",gap:8,alignItems:"center",transition:"background .12s"}}>
+                  style={{width:"100%",textAlign:"left",background:"#ffffff",border:"none",borderBottom:i<4?"1px solid #e5e7eb":"none",padding:"12px 16px",cursor:"pointer",color:"#0f172a",fontSize:14,fontFamily:"'DM Sans',sans-serif",display:"flex",gap:8,alignItems:"center",transition:"background .12s"}}>
                   <span style={{opacity:.4}}>📍</span>
                   <span style={{fontWeight:600}}>{c.name}</span>
-                  {c.admin1&&<span style={{color:"#4b7b9e",fontSize:12}}>{c.admin1}</span>}
-                  <span style={{color:"#0f2035",marginLeft:"auto",fontSize:11,fontFamily:"'DM Mono',monospace",flexShrink:0}}>{c.country}</span>
+                  {c.admin1&&<span style={{color:"#64748b",fontSize:12}}>{c.admin1}</span>}
+                  <span style={{color:"#94a3b8",marginLeft:"auto",fontSize:11,fontFamily:"'DM Mono',monospace",flexShrink:0}}>{c.country}</span>
                 </button>
               ))}
             </div>
@@ -388,7 +388,7 @@ export default function App() {
         )}
 
         {/* Quick cities */}
-        {status==="idle" && (
+        {status==="idle" && !showDrop && (
           <div style={{animation:"fadeUp .5s ease .12s both"}}>
             <div style={{display:"flex",gap:6,justifyContent:"center",flexWrap:"wrap",marginBottom:22}}>
               {CITIES.map(city=>(
