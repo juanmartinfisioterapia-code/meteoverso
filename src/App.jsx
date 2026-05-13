@@ -204,11 +204,13 @@ function WorldGlobe({ onCitySelect }) {
 
       // Auto-rotate
       globe.controls().autoRotate = true;
-      globe.controls().autoRotateSpeed = 0.6;
+      globe.controls().autoRotateSpeed = 0.5;
       globe.controls().enableZoom = true;
-      globe.controls().zoomSpeed = 3;
-      globe.controls().rotateSpeed = 0.7;
-      globe.pointOfView({ altitude: 2.5 });
+      globe.controls().zoomSpeed = 8;
+      globe.controls().rotateSpeed = 0.6;
+      globe.controls().minDistance = 101;
+      globe.controls().maxDistance = 600;
+      globe.pointOfView({ altitude: 1.8 });
 
       globeRef.current = globe;
       setLoaded(true);
