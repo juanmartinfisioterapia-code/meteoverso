@@ -176,25 +176,39 @@ function WorldGlobe({ onCitySelect }) {
         .height(containerRef.current.offsetWidth)
         .onGlobeClick(async ({ lat, lng }) => {
           setHint(false);
-          // Reverse geocode using Open-Meteo
           try {
-            const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=a&latitude=${lat}&longitude=${lng}&count=1&language=es&format=json`);
+            // Use Nominatim for real reverse geocoding
+            const r = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=es`,
+              { headers: { 'User-Agent': 'Meteoverso/1.0' } }
+            );
             const d = await r.json();
-            const city = d.results?.[0];
+            const addr = d.address || {};
+            const cityName = addr.city || addr.town || addr.village || addr.municipality || addr.county || d.name || 'Este punto';
+            const country = addr.country || '';
+            const state = addr.state || '';
+            const label = [cityName, state, country].filter(Boolean).join(', ');
+            // Now forward geocode to get proper lat/lon for the city
+            const r2 = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cityName)}&count=1&language=es&format=json`);
+            const d2 = await r2.json();
+            const city = d2.results?.[0];
             if (city) {
-              onCitySelect(city.latitude, city.longitude, city.name, [city.name, city.admin1, city.country].filter(Boolean).join(', '));
+              onCitySelect(city.latitude, city.longitude, cityName, label);
             } else {
-              onCitySelect(lat, lng, 'Este punto', `${lat.toFixed(2)}°, ${lng.toFixed(2)}°`);
+              onCitySelect(lat, lng, cityName, label);
             }
           } catch {
-            onCitySelect(lat, lng, 'Este punto', `${lat.toFixed(2)}°, ${lng.toFixed(2)}°`);
+            onCitySelect(lat, lng, 'Este punto', `${lat.toFixed(2)}°N ${lng.toFixed(2)}°E`);
           }
         });
 
       // Auto-rotate
       globe.controls().autoRotate = true;
-      globe.controls().autoRotateSpeed = 0.8;
+      globe.controls().autoRotateSpeed = 0.6;
       globe.controls().enableZoom = true;
+      globe.controls().zoomSpeed = 3;
+      globe.controls().rotateSpeed = 0.7;
+      globe.pointOfView({ altitude: 2.5 });
 
       globeRef.current = globe;
       setLoaded(true);
