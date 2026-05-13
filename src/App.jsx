@@ -204,13 +204,32 @@ function WorldGlobe({ onCitySelect }) {
 
       // Auto-rotate
       globe.controls().autoRotate = true;
-      globe.controls().autoRotateSpeed = 0.5;
+      globe.controls().autoRotateSpeed = 0.4;
       globe.controls().enableZoom = true;
-      globe.controls().zoomSpeed = 8;
-      globe.controls().rotateSpeed = 0.6;
-      globe.controls().minDistance = 101;
-      globe.controls().maxDistance = 600;
-      globe.pointOfView({ altitude: 1.8 });
+      globe.controls().zoomSpeed = 20;
+      globe.controls().rotateSpeed = 0.5;
+      globe.controls().minDistance = 101.5;
+      globe.controls().maxDistance = 500;
+      globe.pointOfView({ altitude: 1.5 });
+
+      // Extra: handle pinch zoom on mobile manually
+      let lastDist = null;
+      containerRef.current.addEventListener('touchmove', e => {
+        if (e.touches.length === 2) {
+          const dx = e.touches[0].clientX - e.touches[1].clientX;
+          const dy = e.touches[0].clientY - e.touches[1].clientY;
+          const dist = Math.sqrt(dx*dx + dy*dy);
+          if (lastDist !== null) {
+            const delta = (lastDist - dist) * 0.01;
+            const pov = globe.pointOfView();
+            globe.pointOfView({ altitude: Math.max(0.05, Math.min(4, pov.altitude + delta)) }, 0);
+          }
+          lastDist = dist;
+        } else {
+          lastDist = null;
+        }
+      }, { passive: true });
+      containerRef.current.addEventListener('touchend', () => { lastDist = null; }, { passive: true });
 
       globeRef.current = globe;
       setLoaded(true);
