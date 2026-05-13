@@ -183,8 +183,9 @@ function WorldMap({ onCitySelect }) {
       });
 
       // Base map - dark style
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Physical_Map/MapServer/tile/{z}/{y}/{x}', {
         maxZoom: 19,
+        attribution: 'Esri'
       }).addTo(map);
 
       // Cloud layer from OpenWeatherMap (free, no key needed for tiles)
