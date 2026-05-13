@@ -298,7 +298,7 @@ export default function App() {
         @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
         @keyframes twinkle{0%,100%{opacity:.12}50%{opacity:.6}}
         @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-        .city-pill:hover{background:rgba(56,189,248,.12)!important;color:#38BDF8!important;border-color:rgba(56,189,248,.3)!important}
+        .city-pill:hover{background:rgba(56,189,248,.2)!important;color:#fff!important;border-color:#38BDF8!important}
         .drop-row:hover{background:#f0f9ff!important}
         .src-card{transition:transform .2s,box-shadow .2s}
         .src-card:hover{transform:translateY(-3px);box-shadow:0 12px 40px rgba(0,0,0,.4)}
@@ -321,11 +321,11 @@ export default function App() {
         {/* HEADER */}
         <div style={{textAlign:"center",marginBottom:28,animation:"fadeUp .5s ease both"}}>
           <div style={{marginBottom:10,display:"inline-block",animation:"float 5s ease-in-out infinite"}}><img src="https://openweathermap.org/img/wn/02d@2x.png" width="72" height="72" alt="logo" style={{filter:"drop-shadow(0 0 20px rgba(56,189,248,.6))"}}/></div>
-          <h1 style={{fontFamily:"'Syne',sans-serif",fontSize:"clamp(28px,7vw,48px)",fontWeight:900,letterSpacing:"-.03em",lineHeight:1,marginBottom:5,background:"linear-gradient(135deg,#bae6fd 0%,#38BDF8 50%,#60A5FA 100%)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>
+          <h1 style={{fontFamily:"'Syne',sans-serif",fontSize:"clamp(32px,8vw,54px)",fontWeight:900,letterSpacing:"-.03em",lineHeight:1,marginBottom:5,background:"linear-gradient(135deg,#bae6fd 0%,#38BDF8 50%,#60A5FA 100%)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>
             Meteoverso
           </h1>
-          <div style={{color:"#164e63",fontSize:9,letterSpacing:".14em",textTransform:"uppercase",fontFamily:"'DM Mono',monospace",marginBottom:6}}>comparador meteorológico científico</div>
-          <p style={{color:"#1e4060",fontSize:12,lineHeight:1.5}}>Tres modelos · Un consenso · Sin registro</p>
+          <div style={{color:"#94d4e8",fontSize:9,letterSpacing:".14em",textTransform:"uppercase",fontFamily:"'DM Mono',monospace",marginBottom:6}}>comparador meteorológico científico</div>
+          <p style={{color:"#e0f2fe",fontSize:12,lineHeight:1.5}}>Tres modelos · Un consenso · Sin registro</p>
         </div>
 
         {/* SEARCH */}
@@ -393,12 +393,12 @@ export default function App() {
             <div style={{display:"flex",gap:6,justifyContent:"center",flexWrap:"wrap",marginBottom:22}}>
               {CITIES.map(city=>(
                 <button key={city} onClick={()=>quickCity(city)} className="city-pill"
-                  style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.07)",borderRadius:30,padding:"5px 14px",color:"#1e4060",fontSize:12,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",transition:"all .15s"}}>
+                  style={{background:"rgba(255,255,255,.05)",border:"1px solid rgba(255,255,255,.35)",borderRadius:30,padding:"6px 16px",color:"#f0f9ff",fontSize:13,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",transition:"all .15s",fontWeight:500}}>
                   {city}
                 </button>
               ))}
             </div>
-            <div style={{textAlign:"center"}}><p style={{color:"#0f2035",fontSize:12,lineHeight:1.9}}>Sin registro · Sin API key · Datos científicos reales</p></div>
+            <div style={{textAlign:"center"}}><p style={{color:"#94a3b8",fontSize:12,lineHeight:1.9}}>Sin registro · Sin API key · Datos científicos reales</p></div>
           </div>
         )}
 
