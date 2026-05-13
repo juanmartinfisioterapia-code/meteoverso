@@ -154,6 +154,85 @@ async function generateVeredicto(results, cityName, type) {
   } catch { return null; }
 }
 
+
+// ─── Globe Component ──────────────────────────────────────────────────────────
+function WorldGlobe({ onCitySelect }) {
+  const globeRef = useRef(null);
+  const containerRef = useRef(null);
+  const [loaded, setLoaded] = useState(false);
+  const [hint, setHint] = useState(true);
+
+  useEffect(() => {
+    // Load Globe.gl dynamically
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/globe.gl@2.27.2/dist/globe.gl.min.js';
+    script.onload = () => {
+      if (!containerRef.current) return;
+      const Globe = window.Globe;
+      const globe = Globe()(containerRef.current)
+        .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
+        .backgroundImageUrl('https://unpkg.com/three-globe/example/img/night-sky.png')
+        .width(containerRef.current.offsetWidth)
+        .height(containerRef.current.offsetWidth)
+        .onGlobeClick(async ({ lat, lng }) => {
+          setHint(false);
+          // Reverse geocode using Open-Meteo
+          try {
+            const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=a&latitude=${lat}&longitude=${lng}&count=1&language=es&format=json`);
+            const d = await r.json();
+            const city = d.results?.[0];
+            if (city) {
+              onCitySelect(city.latitude, city.longitude, city.name, [city.name, city.admin1, city.country].filter(Boolean).join(', '));
+            } else {
+              onCitySelect(lat, lng, 'Este punto', `${lat.toFixed(2)}°, ${lng.toFixed(2)}°`);
+            }
+          } catch {
+            onCitySelect(lat, lng, 'Este punto', `${lat.toFixed(2)}°, ${lng.toFixed(2)}°`);
+          }
+        });
+
+      // Auto-rotate
+      globe.controls().autoRotate = true;
+      globe.controls().autoRotateSpeed = 0.8;
+      globe.controls().enableZoom = true;
+
+      globeRef.current = globe;
+      setLoaded(true);
+    };
+    document.head.appendChild(script);
+    return () => {
+      if (globeRef.current) {
+        try { globeRef.current._destructor?.(); } catch {}
+      }
+    };
+  }, []);
+
+  return (
+    <div style={{marginTop:28,animation:"fadeUp .6s ease .2s both"}}>
+      <div style={{textAlign:"center",marginBottom:12}}>
+        <span style={{color:"#38BDF8",fontSize:11,fontFamily:"'DM Mono',monospace",textTransform:"uppercase",letterSpacing:".1em"}}>🌍 Explorador de clima global</span>
+        <div style={{color:"#1e3a5f",fontSize:11,marginTop:3}}>Pulsa cualquier punto del mundo para ver su tiempo</div>
+      </div>
+      <div style={{position:"relative",borderRadius:20,overflow:"hidden",border:"1px solid rgba(56,189,248,.2)",boxShadow:"0 0 40px rgba(56,189,248,.1)"}}>
+        <div ref={containerRef} style={{width:"100%",aspectRatio:"1/1",background:"#000810"}}/>
+        {!loaded && (
+          <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"#000810"}}>
+            <div style={{textAlign:"center"}}>
+              <div style={{width:32,height:32,border:"3px solid rgba(56,189,248,.3)",borderTopColor:"#38BDF8",borderRadius:"50%",animation:"spin .8s linear infinite",margin:"0 auto 10px"}}/>
+              <div style={{color:"#1e4060",fontSize:12,fontFamily:"'DM Mono',monospace"}}>Cargando globo...</div>
+            </div>
+          </div>
+        )}
+        {loaded && hint && (
+          <div style={{position:"absolute",bottom:16,left:"50%",transform:"translateX(-50%)",background:"rgba(6,16,30,.85)",border:"1px solid rgba(56,189,248,.2)",borderRadius:20,padding:"6px 14px",whiteSpace:"nowrap"}}>
+            <span style={{color:"#38BDF8",fontSize:11}}>👆 Pulsa para ver el tiempo</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Components ───────────────────────────────────────────────────────────────
 
 function VeredictoBox({ text, loading, type }) {
@@ -468,6 +547,10 @@ export default function App() {
               ))}
             </div>
             <div style={{textAlign:"center"}}><p style={{color:"#94a3b8",fontSize:12,lineHeight:1.9}}>Sin registro · Sin API key · Datos científicos reales</p></div>
+            <WorldGlobe onCitySelect={(lat, lon, name, label) => {
+              setInput(label);
+              runModels(lat, lon, name);
+            }}/>
           </div>
         )}
 
