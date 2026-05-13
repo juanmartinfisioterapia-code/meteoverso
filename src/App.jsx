@@ -368,10 +368,10 @@ export default function App() {
 
           {/* Dropdown */}
           {showDrop && drops.length > 0 && !isLoading && (
-            <div style={{position:"absolute",top:"calc(100% + 5px)",left:0,right:0,background:"#071420",border:"1px solid rgba(56,189,248,.4)",borderRadius:12,overflow:"hidden",zIndex:999,boxShadow:"0 24px 64px rgba(0,0,0,1)"}}>
+            <div style={{position:"absolute",top:"calc(100% + 5px)",left:0,right:0,background:"#000d1a",border:"2px solid #38BDF8",borderRadius:12,overflow:"hidden",zIndex:9999,boxShadow:"0 24px 64px #000000",isolation:"isolate"}}>
               {drops.slice(0,5).map((c,i)=>(
                 <button key={i} onClick={()=>pick(c)} className="drop-row"
-                  style={{width:"100%",textAlign:"left",background:"transparent",border:"none",borderBottom:i<4?"1px solid rgba(255,255,255,.04)":"none",padding:"11px 16px",cursor:"pointer",color:"#e2e8f0",fontSize:14,fontFamily:"'DM Sans',sans-serif",display:"flex",gap:8,alignItems:"center",transition:"background .12s"}}>
+                  style={{width:"100%",textAlign:"left",background:"#000d1a",border:"none",borderBottom:i<4?"1px solid rgba(56,189,248,.15)":"none",padding:"11px 16px",cursor:"pointer",color:"#e2e8f0",fontSize:14,fontFamily:"'DM Sans',sans-serif",display:"flex",gap:8,alignItems:"center",transition:"background .12s"}}>
                   <span style={{opacity:.4}}>📍</span>
                   <span style={{fontWeight:600}}>{c.name}</span>
                   {c.admin1&&<span style={{color:"#4b7b9e",fontSize:12}}>{c.admin1}</span>}
