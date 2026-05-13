@@ -160,6 +160,24 @@ async function generateVeredicto(results, cityName) {
   }
 }
 
+
+function hourConcordance(data, hourIndex) {
+  const temps = MODELS.map(m => data[m.id]?.hourly?.[hourIndex]?.temp).filter(v => v != null);
+  const precips = MODELS.map(m => data[m.id]?.hourly?.[hourIndex]?.precipProb).filter(v => v != null);
+  if (temps.length < 2) return { color: "#475569", label: "Sin datos", pct: 0 };
+  const tSpread = Math.max(...temps) - Math.min(...temps);
+  const pSpread = precips.length > 1 ? Math.max(...precips) - Math.min(...precips) : 0;
+  const score = tSpread === 0 && pSpread <= 10 ? 100
+    : tSpread <= 1 && pSpread <= 20 ? 85
+    : tSpread <= 2 && pSpread <= 30 ? 65
+    : tSpread <= 4 ? 40 : 20;
+  return {
+    pct: score,
+    color: score >= 80 ? "#86EFAC" : score >= 50 ? "#FCD34D" : "#FCA5A5",
+    label: score >= 80 ? "Alta" : score >= 50 ? "Media" : "Baja",
+  };
+}
+
 function SectionTitle({ emoji, title, sub }) {
   return (
     <div style={{marginBottom:14,paddingTop:28,borderTop:"1px solid rgba(255,255,255,.05)"}}>
@@ -531,6 +549,17 @@ export default function App() {
                                 </div>
                               ))}
                             </div>
+                            {(() => {
+                              const c = hourConcordance(data, i);
+                              return (
+                                <div style={{marginTop:6}}>
+                                  <div style={{background:"rgba(255,255,255,.06)",borderRadius:4,height:4,overflow:"hidden"}}>
+                                    <div style={{width:`${c.pct}%`,height:"100%",background:c.color,borderRadius:4,transition:"width .8s ease"}}/>
+                                  </div>
+                                  <div style={{color:c.color,fontSize:8,textAlign:"center",marginTop:2,fontFamily:"'DM Mono',monospace",fontWeight:700}}>{c.label}</div>
+                                </div>
+                              );
+                            })()}
                           </div>
                         ))
                       ) : (
