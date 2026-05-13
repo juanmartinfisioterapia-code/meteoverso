@@ -2,12 +2,36 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Meteoverso</title>
     <meta name="description" content="Comparador meteorológico científico. Tres modelos. Un consenso." />
+
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#38BDF8" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Meteoverso" />
+
+    <!-- iOS splash / icon -->
+    <link rel="apple-touch-icon" href="https://cdn.jsdelivr.net/gh/twitter/twemoji@14/assets/72x72/26c5.png" />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Meteoverso" />
+    <meta property="og:description" content="Tres modelos meteorológicos. Un consenso. Sin registro." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://meteoverso.vercel.app" />
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js');
+        });
+      }
+    </script>
   </body>
 </html>

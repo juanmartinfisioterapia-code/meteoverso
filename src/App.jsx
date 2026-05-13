@@ -199,9 +199,30 @@ export default function App() {
   const [status,       setStatus]       = useState("idle");
   const [errMsg,       setErrMsg]       = useState("");
   const [geoLoading,   setGeoLoading]   = useState(false);
+  const [showInstall,  setShowInstall]  = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [veredicto,    setVeredicto]    = useState("");
   const [vLoad,        setVLoad]        = useState(false);
   const deb = useRef(null);
+
+  useEffect(() => {
+    const handler = e => { e.preventDefault(); setDeferredPrompt(e); setShowInstall(true); };
+    window.addEventListener('beforeinstallprompt', handler);
+    // Show iOS hint after 3s if not already installed
+    const isIOS = /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
+    const isStandalone = window.navigator.standalone;
+    if (isIOS && !isStandalone) setTimeout(() => setShowInstall(true), 3000);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      setDeferredPrompt(null);
+    }
+    setShowInstall(false);
+  };
 
   useEffect(() => {
     if (input.length < 2) { setDrops([]); setShowDrop(false); return; }
@@ -327,6 +348,27 @@ export default function App() {
           <div style={{color:"#94d4e8",fontSize:9,letterSpacing:".14em",textTransform:"uppercase",fontFamily:"'DM Mono',monospace",marginBottom:6}}>comparador meteorológico científico</div>
           <p style={{color:"#e0f2fe",fontSize:12,lineHeight:1.5}}>Tres modelos · Un consenso · Sin registro</p>
         </div>
+
+        {/* INSTALL BANNER */}
+        {showInstall && (
+          <div style={{maxWidth:560,margin:"0 auto 16px",background:"linear-gradient(135deg,rgba(56,189,248,.12),rgba(96,165,250,.1))",border:"1px solid rgba(56,189,248,.3)",borderRadius:14,padding:"12px 16px",display:"flex",alignItems:"center",gap:12,animation:"fadeUp .4s ease both"}}>
+            <span style={{fontSize:24,flexShrink:0}}>📲</span>
+            <div style={{flex:1}}>
+              <div style={{color:"#e0f2fe",fontSize:13,fontWeight:600,marginBottom:2}}>Instala Meteoverso</div>
+              <div style={{color:"#4b7b9e",fontSize:11}}>
+                {deferredPrompt ? "Añádela a tu pantalla de inicio" : 'Pulsa compartir → "Añadir a inicio"'}
+              </div>
+            </div>
+            {deferredPrompt && (
+              <button onClick={handleInstall}
+                style={{background:"#38BDF8",color:"#06101e",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>
+                Instalar
+              </button>
+            )}
+            <button onClick={()=>setShowInstall(false)}
+              style={{background:"none",border:"none",color:"#4b7b9e",cursor:"pointer",fontSize:16,flexShrink:0,padding:0}}>✕</button>
+          </div>
+        )}
 
         {/* SEARCH */}
         <div style={{position:"relative",maxWidth:560,margin:"0 auto 22px",animation:"fadeUp .5s ease .08s both"}}>
