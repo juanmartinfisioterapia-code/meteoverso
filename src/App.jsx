@@ -174,7 +174,7 @@ function WorldGlobe({ onCitySelect }) {
         .backgroundImageUrl('https://unpkg.com/three-globe/example/img/night-sky.png')
         .width(containerRef.current.offsetWidth)
         .height(containerRef.current.offsetWidth)
-        .onGlobeClick(async ({ lat, lng }) => {
+        .onGlobeDblClick(async ({ lat, lng }) => {
           setHint(false);
           try {
             // Use Nominatim for real reverse geocoding
@@ -246,7 +246,7 @@ function WorldGlobe({ onCitySelect }) {
     <div style={{marginTop:28,animation:"fadeUp .6s ease .2s both"}}>
       <div style={{textAlign:"center",marginBottom:12}}>
         <span style={{color:"#38BDF8",fontSize:11,fontFamily:"'DM Mono',monospace",textTransform:"uppercase",letterSpacing:".1em"}}>🌍 Explorador de clima global</span>
-        <div style={{color:"#1e3a5f",fontSize:11,marginTop:3}}>Pulsa cualquier punto del mundo para ver su tiempo</div>
+        <div style={{color:"#1e3a5f",fontSize:11,marginTop:3}}>Doble toque en cualquier punto para ver su tiempo</div>
       </div>
       <div style={{position:"relative",borderRadius:20,overflow:"hidden",border:"1px solid rgba(56,189,248,.2)",boxShadow:"0 0 40px rgba(56,189,248,.1)"}}>
         <div ref={containerRef} style={{width:"100%",aspectRatio:"1/1",background:"#000810"}}/>
@@ -260,7 +260,7 @@ function WorldGlobe({ onCitySelect }) {
         )}
         {loaded && hint && (
           <div style={{position:"absolute",bottom:16,left:"50%",transform:"translateX(-50%)",background:"rgba(6,16,30,.85)",border:"1px solid rgba(56,189,248,.2)",borderRadius:20,padding:"6px 14px",whiteSpace:"nowrap"}}>
-            <span style={{color:"#38BDF8",fontSize:11}}>👆 Pulsa para ver el tiempo</span>
+            <span style={{color:"#38BDF8",fontSize:11}}>👆 Doble toque para ver el tiempo</span>
           </div>
         )}
       </div>
