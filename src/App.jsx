@@ -155,124 +155,114 @@ async function generateVeredicto(results, cityName, type) {
 }
 
 
-// ─── Globe Component ──────────────────────────────────────────────────────────
-function WorldGlobe({ onCitySelect }) {
-  const globeRef = useRef(null);
+// ─── Map Component ───────────────────────────────────────────────────────────
+function WorldMap({ onCitySelect }) {
+  const mapRef = useRef(null);
   const containerRef = useRef(null);
   const [loaded, setLoaded] = useState(false);
-  const [hint, setHint] = useState(true);
-
-  const [globeError, setGlobeError] = useState(false);
 
   useEffect(() => {
-    // Load Globe.gl dynamically
+    // Load Leaflet CSS
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(link);
+
+    // Load Leaflet JS
     const script = document.createElement('script');
-    script.src = 'https://unpkg.com/globe.gl@2.26.1/dist/globe.gl.min.js';
-    script.onerror = () => setGlobeError(true);
-    // Timeout fallback after 10s
-    const timeout = setTimeout(() => setGlobeError(true), 10000);
+    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
     script.onload = () => {
-      clearTimeout(timeout);
-      if (!containerRef.current) return;
-      const Globe = window.Globe;
-      const globe = Globe()(containerRef.current)
-        .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
-        .backgroundImageUrl('https://unpkg.com/three-globe/example/img/night-sky.png')
-        .width(containerRef.current.offsetWidth)
-        .height(containerRef.current.offsetWidth)
-        .onGlobeDblClick(async ({ lat, lng }) => {
-          setHint(false);
-          try {
-            // Use Nominatim for real reverse geocoding
-            const r = await fetch(
-              `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=es`,
-              { headers: { 'User-Agent': 'Meteoverso/1.0' } }
-            );
-            const d = await r.json();
-            const addr = d.address || {};
-            const cityName = addr.city || addr.town || addr.village || addr.municipality || addr.county || d.name || 'Este punto';
-            const country = addr.country || '';
-            const state = addr.state || '';
-            const label = [cityName, state, country].filter(Boolean).join(', ');
-            // Now forward geocode to get proper lat/lon for the city
-            const r2 = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cityName)}&count=1&language=es&format=json`);
-            const d2 = await r2.json();
-            const city = d2.results?.[0];
-            if (city) {
-              onCitySelect(city.latitude, city.longitude, cityName, label);
-            } else {
-              onCitySelect(lat, lng, cityName, label);
-            }
-          } catch {
-            onCitySelect(lat, lng, 'Este punto', `${lat.toFixed(2)}°N ${lng.toFixed(2)}°E`);
-          }
-        });
+      if (!containerRef.current || mapRef.current) return;
+      const L = window.L;
 
-      // Auto-rotate
-      globe.controls().autoRotate = true;
-      globe.controls().autoRotateSpeed = 0.4;
-      globe.controls().enableZoom = true;
-      globe.controls().zoomSpeed = 20;
-      globe.controls().rotateSpeed = 0.5;
-      globe.controls().minDistance = 101.5;
-      globe.controls().maxDistance = 500;
-      globe.pointOfView({ altitude: 1.5 });
+      const map = L.map(containerRef.current, {
+        center: [40.4, -3.7],
+        zoom: 5,
+        zoomControl: true,
+        attributionControl: false,
+      });
 
-      // Extra: handle pinch zoom on mobile manually
-      let lastDist = null;
-      containerRef.current.addEventListener('touchmove', e => {
-        if (e.touches.length === 2) {
-          const dx = e.touches[0].clientX - e.touches[1].clientX;
-          const dy = e.touches[0].clientY - e.touches[1].clientY;
-          const dist = Math.sqrt(dx*dx + dy*dy);
-          if (lastDist !== null) {
-            const delta = (lastDist - dist) * 0.01;
-            const pov = globe.pointOfView();
-            globe.pointOfView({ altitude: Math.max(0.05, Math.min(4, pov.altitude + delta)) }, 0);
-          }
-          lastDist = dist;
-        } else {
-          lastDist = null;
+      // Base map - dark style
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19,
+      }).addTo(map);
+
+      // Cloud layer from OpenWeatherMap (free, no key needed for tiles)
+      L.tileLayer('https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=demo', {
+        opacity: 0.5,
+        maxZoom: 19,
+      }).addTo(map);
+
+      // Rain layer
+      L.tileLayer('https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=demo', {
+        opacity: 0.4,
+        maxZoom: 19,
+      }).addTo(map);
+
+      // Double click to select city
+      map.on('dblclick', async (e) => {
+        const { lat, lng } = e.latlng;
+        map.setView([lat, lng], Math.max(map.getZoom(), 10), { animate: true });
+        try {
+          const r = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=es`,
+            { headers: { 'User-Agent': 'Meteoverso/1.0' } }
+          );
+          const d = await r.json();
+          const addr = d.address || {};
+          const cityName = addr.city || addr.town || addr.village || addr.municipality || addr.county || d.name || 'Este punto';
+          const country = addr.country || '';
+          const state = addr.state || '';
+          const label = [cityName, state, country].filter(Boolean).join(', ');
+
+          // Add marker
+          L.marker([lat, lng], {
+            icon: L.divIcon({
+              html: '<div style="background:#38BDF8;width:12px;height:12px;border-radius:50%;border:2px solid white;box-shadow:0 0 8px rgba(56,189,248,.8)"></div>',
+              iconSize: [12, 12],
+              iconAnchor: [6, 6],
+              className: ''
+            })
+          }).addTo(map).bindPopup(`<b>${cityName}</b>`).openPopup();
+
+          const r2 = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cityName)}&count=1&language=es&format=json`);
+          const d2 = await r2.json();
+          const city = d2.results?.[0];
+          if (city) onCitySelect(city.latitude, city.longitude, cityName, label);
+          else onCitySelect(lat, lng, cityName, label);
+        } catch {
+          onCitySelect(lat, lng, 'Este punto', `${lat.toFixed(2)}°N ${lng.toFixed(2)}°E`);
         }
-      }, { passive: true });
-      containerRef.current.addEventListener('touchend', () => { lastDist = null; }, { passive: true });
+      });
 
-      globeRef.current = globe;
+      mapRef.current = map;
       setLoaded(true);
     };
     document.head.appendChild(script);
+
     return () => {
-      clearTimeout(timeout);
-      if (globeRef.current) {
-        try { globeRef.current._destructor?.(); } catch {}
-      }
+      if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
     };
   }, []);
 
   return (
     <div style={{marginTop:28,animation:"fadeUp .6s ease .2s both"}}>
       <div style={{textAlign:"center",marginBottom:12}}>
-        <span style={{color:"#38BDF8",fontSize:11,fontFamily:"'DM Mono',monospace",textTransform:"uppercase",letterSpacing:".1em"}}>🌍 Explorador de clima global</span>
+        <span style={{color:"#38BDF8",fontSize:11,fontFamily:"'DM Mono',monospace",textTransform:"uppercase",letterSpacing:".1em"}}>🗺️ Mapa meteorológico</span>
         <div style={{color:"#1e3a5f",fontSize:11,marginTop:3}}>Doble toque en cualquier punto para ver su tiempo</div>
       </div>
-      <div style={{position:"relative",borderRadius:20,overflow:"hidden",border:"1px solid rgba(56,189,248,.2)",boxShadow:"0 0 40px rgba(56,189,248,.1)"}}>
-        <div ref={containerRef} style={{width:"100%",aspectRatio:"1/1",background:"#000810"}}/>
-        {!loaded && !globeError && (
-          <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"#000810"}}>
+      <div style={{position:"relative",borderRadius:16,overflow:"hidden",border:"1px solid rgba(56,189,248,.2)",boxShadow:"0 0 30px rgba(56,189,248,.08)"}}>
+        <div ref={containerRef} style={{width:"100%",height:340,background:"#0a1628"}}/>
+        {!loaded && (
+          <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"#0a1628"}}>
             <div style={{textAlign:"center"}}>
-              <div style={{width:32,height:32,border:"3px solid rgba(56,189,248,.3)",borderTopColor:"#38BDF8",borderRadius:"50%",animation:"spin .8s linear infinite",margin:"0 auto 10px"}}/>
-              <div style={{color:"#1e4060",fontSize:12,fontFamily:"'DM Mono',monospace"}}>Cargando globo...</div>
+              <div style={{width:28,height:28,border:"3px solid rgba(56,189,248,.3)",borderTopColor:"#38BDF8",borderRadius:"50%",animation:"spin .8s linear infinite",margin:"0 auto 10px"}}/>
+              <div style={{color:"#1e4060",fontSize:12,fontFamily:"'DM Mono',monospace"}}>Cargando mapa...</div>
             </div>
           </div>
         )}
-        {globeError && (
-          <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"#000810",flexDirection:"column",gap:12}}>
-            <span style={{fontSize:40}}>🌍</span>
-            <div style={{color:"#1e4060",fontSize:13,textAlign:"center",padding:"0 20px"}}>El globo 3D no está disponible en este dispositivo.<br/>Usa el buscador para encontrar tu ciudad.</div>
-          </div>
-        )}
-        {loaded && hint && (
-          <div style={{position:"absolute",bottom:16,left:"50%",transform:"translateX(-50%)",background:"rgba(6,16,30,.85)",border:"1px solid rgba(56,189,248,.2)",borderRadius:20,padding:"6px 14px",whiteSpace:"nowrap"}}>
+        {loaded && (
+          <div style={{position:"absolute",bottom:12,left:"50%",transform:"translateX(-50%)",background:"rgba(6,16,30,.85)",border:"1px solid rgba(56,189,248,.2)",borderRadius:20,padding:"5px 14px",whiteSpace:"nowrap",pointerEvents:"none"}}>
             <span style={{color:"#38BDF8",fontSize:11}}>👆 Doble toque para ver el tiempo</span>
           </div>
         )}
@@ -595,7 +585,7 @@ export default function App() {
               ))}
             </div>
             <div style={{textAlign:"center"}}><p style={{color:"#94a3b8",fontSize:12,lineHeight:1.9}}>Sin registro · Sin API key · Datos científicos reales</p></div>
-            <WorldGlobe onCitySelect={(lat, lon, name, label) => {
+            <WorldMap onCitySelect={(lat, lon, name, label) => {
               setInput(label);
               runModels(lat, lon, name);
             }}/>
