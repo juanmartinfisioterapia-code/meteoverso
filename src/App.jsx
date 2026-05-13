@@ -1,18 +1,28 @@
 import { useState, useRef, useEffect } from "react";
 
+// Meteocons icon URLs from basmilius/weather-icons CDN
 const WMO = {
-  0:{icon:"☀️",label:"Despejado"},1:{icon:"🌤️",label:"Casi despejado"},
-  2:{icon:"⛅",label:"Parc. nublado"},3:{icon:"☁️",label:"Nublado"},
-  45:{icon:"🌫️",label:"Niebla"},48:{icon:"🌫️",label:"Niebla helada"},
-  51:{icon:"🌦️",label:"Llovizna"},53:{icon:"🌧️",label:"Llovizna mod."},
-  61:{icon:"🌧️",label:"Lluvia ligera"},63:{icon:"🌧️",label:"Lluvia mod."},
-  65:{icon:"🌧️",label:"Lluvia fuerte"},71:{icon:"🌨️",label:"Nieve ligera"},
-  73:{icon:"❄️",label:"Nieve"},75:{icon:"❄️",label:"Nieve fuerte"},
-  80:{icon:"🌦️",label:"Chubascos"},81:{icon:"🌧️",label:"Chubascos mod."},
-  82:{icon:"⛈️",label:"Chubascos fuertes"},95:{icon:"⛈️",label:"Tormenta"},
-  99:{icon:"⛈️",label:"Tormenta+granizo"},
+  0:{icon:"https://basmilius.github.io/weather-icons/production/fill/all/clear-day.svg",label:"Despejado",color:"#FCD34D"},
+  1:{icon:"https://basmilius.github.io/weather-icons/production/fill/all/mostly-clear-day.svg",label:"Casi despejado",color:"#FCD34D"},
+  2:{icon:"https://basmilius.github.io/weather-icons/production/fill/all/partly-cloudy-day.svg",label:"Parc. nublado",color:"#93C5FD"},
+  3:{icon:"https://basmilius.github.io/weather-icons/production/fill/all/overcast-day.svg",label:"Nublado",color:"#94A3B8"},
+  45:{icon:"https://basmilius.github.io/weather-icons/production/fill/all/fog-day.svg",label:"Niebla",color:"#94A3B8"},
+  48:{icon:"https://basmilius.github.io/weather-icons/production/fill/all/fog.svg",label:"Niebla helada",color:"#BAE6FD"},
+  51:{icon:"https://basmilius.github.io/weather-icons/production/fill/all/drizzle.svg",label:"Llovizna",color:"#60A5FA"},
+  53:{icon:"https://basmilius.github.io/weather-icons/production/fill/all/drizzle.svg",label:"Llovizna mod.",color:"#60A5FA"},
+  61:{icon:"https://basmilius.github.io/weather-icons/production/fill/all/rain.svg",label:"Lluvia ligera",color:"#38BDF8"},
+  63:{icon:"https://basmilius.github.io/weather-icons/production/fill/all/rain.svg",label:"Lluvia mod.",color:"#38BDF8"},
+  65:{icon:"https://basmilius.github.io/weather-icons/production/fill/all/extreme-rain.svg",label:"Lluvia fuerte",color:"#0EA5E9"},
+  71:{icon:"https://basmilius.github.io/weather-icons/production/fill/all/snow.svg",label:"Nieve ligera",color:"#E0F2FE"},
+  73:{icon:"https://basmilius.github.io/weather-icons/production/fill/all/snow.svg",label:"Nieve",color:"#E0F2FE"},
+  75:{icon:"https://basmilius.github.io/weather-icons/production/fill/all/extreme-snow.svg",label:"Nieve fuerte",color:"#BAE6FD"},
+  80:{icon:"https://basmilius.github.io/weather-icons/production/fill/all/partly-cloudy-day-rain.svg",label:"Chubascos",color:"#60A5FA"},
+  81:{icon:"https://basmilius.github.io/weather-icons/production/fill/all/rain.svg",label:"Chubascos mod.",color:"#38BDF8"},
+  82:{icon:"https://basmilius.github.io/weather-icons/production/fill/all/extreme-rain.svg",label:"Chubascos fuertes",color:"#0EA5E9"},
+  95:{icon:"https://basmilius.github.io/weather-icons/production/fill/all/thunderstorms.svg",label:"Tormenta",color:"#818CF8"},
+  99:{icon:"https://basmilius.github.io/weather-icons/production/fill/all/thunderstorms-extreme.svg",label:"Tormenta+granizo",color:"#6366F1"},
 };
-const wmo = c => WMO[c] ?? WMO[Math.floor((c||0)/10)*10] ?? {icon:"🌡️",label:"Variable"};
+const wmo = c => WMO[c] ?? WMO[Math.floor((c||0)/10)*10] ?? {icon:"https://basmilius.github.io/weather-icons/production/fill/all/not-available.svg",label:"Variable",color:"#94A3B8"};
 const windDir = d => ["N","NE","E","SE","S","SO","O","NO"][Math.round((d||0)/45)%8];
 const DAYS_ES = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
 const MONTHS_ES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
@@ -293,7 +303,7 @@ export default function App() {
 
         {/* HEADER */}
         <div style={{textAlign:"center",marginBottom:28,animation:"fadeUp .5s ease both"}}>
-          <div style={{fontSize:32,marginBottom:6,display:"inline-block",animation:"float 5s ease-in-out infinite"}}>🌤️</div>
+          <div style={{marginBottom:10,display:"inline-block",animation:"float 5s ease-in-out infinite"}}><img src="https://basmilius.github.io/weather-icons/production/fill/all/partly-cloudy-day.svg" width="72" height="72" alt="logo" style={{filter:"drop-shadow(0 0 20px rgba(56,189,248,.6))"}}/></div>
           <h1 style={{fontFamily:"'Syne',sans-serif",fontSize:"clamp(28px,7vw,48px)",fontWeight:900,letterSpacing:"-.03em",lineHeight:1,marginBottom:5,background:"linear-gradient(135deg,#bae6fd 0%,#38BDF8 50%,#60A5FA 100%)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>
             Meteoverso
           </h1>
@@ -422,7 +432,7 @@ export default function App() {
                   <div>
                     <div style={{color:"#0f2a42",fontSize:9,textTransform:"uppercase",letterSpacing:".1em",fontFamily:"'DM Mono',monospace",marginBottom:4}}>Consenso</div>
                     <div style={{display:"flex",alignItems:"flex-end",gap:7,marginBottom:2}}>
-                      <span style={{fontSize:44}}>{con.info.icon}</span>
+                      <img src={con.info.icon} width="56" height="56" alt={con.info.label}/>
                       <span style={{fontFamily:"'Syne',sans-serif",fontSize:50,fontWeight:900,color:"#f0f9ff",lineHeight:1}}>{con.temp}°C</span>
                     </div>
                     <div style={{color:"#2e6b8a",fontSize:12}}>{con.info.label}</div>
@@ -472,7 +482,7 @@ export default function App() {
                     :(
                       <>
                         <div style={{display:"flex",alignItems:"flex-end",gap:6,marginBottom:2}}>
-                          <span style={{fontSize:36,lineHeight:1}}>{d.info.icon}</span>
+                          <img src={d.info.icon} width="44" height="44" alt={d.info.label} style={{display:"block",marginBottom:2}}/>
                           <span style={{fontFamily:"'Syne',sans-serif",fontSize:40,fontWeight:900,color:"#f0f9ff",lineHeight:1}}>{d.temp}°</span>
                         </div>
                         <div style={{color:m.color,fontSize:11,fontWeight:600,marginBottom:10}}>{d.info.label}</div>
@@ -512,7 +522,7 @@ export default function App() {
                         d.hourly.map((h,i)=>(
                           <div key={i} className="hour-pill" style={{flexShrink:0,width:72,background:m.bg,border:`1px solid ${m.br}`,borderRadius:10,padding:"10px 6px",textAlign:"center",transition:"background .15s"}}>
                             <div style={{color:"#1e4060",fontSize:9,fontFamily:"'DM Mono',monospace",marginBottom:5}}>{fmtHour(h.time)}</div>
-                            <div style={{fontSize:22,marginBottom:3}}>{h.info.icon}</div>
+                            <img src={h.info.icon} width="28" height="28" alt={h.info.label} style={{margin:"0 auto 3px",display:"block"}}/>
                             <div style={{fontFamily:"'Syne',sans-serif",fontSize:18,fontWeight:900,color:"#f0f9ff",marginBottom:6}}>{h.temp}°</div>
                             <div style={{display:"flex",flexDirection:"column",gap:3}}>
                               {[{e:"💧",v:`${h.precipProb}%`},{e:"🌧️",v:`${h.precip}mm`},{e:"💨",v:`${h.wind}km`},{e:"💦",v:`${h.humidity}%`}].map(({e,v})=>(
@@ -558,7 +568,7 @@ export default function App() {
                           <div style={{color:m.color,fontSize:9,fontWeight:700,fontFamily:"'DM Mono',monospace",marginBottom:5,textAlign:"center"}}>{m.name}</div>
                           {!d ? <div style={{color:"#1e3a5f",fontSize:11,textAlign:"center"}}>—</div> : (
                             <div style={{textAlign:"center"}}>
-                              <div style={{fontSize:20,marginBottom:2}}>{d.info.icon}</div>
+                              <img src={d.info.icon} width="28" height="28" alt={d.info.label} style={{margin:"0 auto 2px",display:"block"}}/>
                               <div style={{display:"flex",justifyContent:"center",alignItems:"baseline",gap:2,marginBottom:4}}>
                                 <span style={{fontFamily:"'Syne',sans-serif",fontSize:15,fontWeight:900,color:"#f0f9ff"}}>{d.tempMax}°</span>
                                 <span style={{color:"#1e4060",fontSize:11}}>/</span>
