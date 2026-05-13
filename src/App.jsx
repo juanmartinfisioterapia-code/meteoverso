@@ -162,11 +162,17 @@ function WorldGlobe({ onCitySelect }) {
   const [loaded, setLoaded] = useState(false);
   const [hint, setHint] = useState(true);
 
+  const [globeError, setGlobeError] = useState(false);
+
   useEffect(() => {
     // Load Globe.gl dynamically
     const script = document.createElement('script');
-    script.src = 'https://unpkg.com/globe.gl@2.27.2/dist/globe.gl.min.js';
+    script.src = 'https://unpkg.com/globe.gl@2.26.1/dist/globe.gl.min.js';
+    script.onerror = () => setGlobeError(true);
+    // Timeout fallback after 10s
+    const timeout = setTimeout(() => setGlobeError(true), 10000);
     script.onload = () => {
+      clearTimeout(timeout);
       if (!containerRef.current) return;
       const Globe = window.Globe;
       const globe = Globe()(containerRef.current)
@@ -236,6 +242,7 @@ function WorldGlobe({ onCitySelect }) {
     };
     document.head.appendChild(script);
     return () => {
+      clearTimeout(timeout);
       if (globeRef.current) {
         try { globeRef.current._destructor?.(); } catch {}
       }
@@ -250,12 +257,18 @@ function WorldGlobe({ onCitySelect }) {
       </div>
       <div style={{position:"relative",borderRadius:20,overflow:"hidden",border:"1px solid rgba(56,189,248,.2)",boxShadow:"0 0 40px rgba(56,189,248,.1)"}}>
         <div ref={containerRef} style={{width:"100%",aspectRatio:"1/1",background:"#000810"}}/>
-        {!loaded && (
+        {!loaded && !globeError && (
           <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"#000810"}}>
             <div style={{textAlign:"center"}}>
               <div style={{width:32,height:32,border:"3px solid rgba(56,189,248,.3)",borderTopColor:"#38BDF8",borderRadius:"50%",animation:"spin .8s linear infinite",margin:"0 auto 10px"}}/>
               <div style={{color:"#1e4060",fontSize:12,fontFamily:"'DM Mono',monospace"}}>Cargando globo...</div>
             </div>
+          </div>
+        )}
+        {globeError && (
+          <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"#000810",flexDirection:"column",gap:12}}>
+            <span style={{fontSize:40}}>🌍</span>
+            <div style={{color:"#1e4060",fontSize:13,textAlign:"center",padding:"0 20px"}}>El globo 3D no está disponible en este dispositivo.<br/>Usa el buscador para encontrar tu ciudad.</div>
           </div>
         )}
         {loaded && hint && (
