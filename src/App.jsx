@@ -176,8 +176,8 @@ function WorldMap({ onCitySelect }) {
       const L = window.L;
 
       const map = L.map(containerRef.current, {
-        center: [40.4, -3.7],
-        zoom: 6,
+        center: [20, 10],
+        zoom: 1,
         zoomControl: true,
         attributionControl: false,
       });
@@ -276,7 +276,7 @@ function WorldMap({ onCitySelect }) {
         <div style={{color:"#1e3a5f",fontSize:11,marginTop:3}}>Doble toque en cualquier punto para ver su tiempo</div>
       </div>
       <div style={{position:"relative",borderRadius:16,overflow:"hidden",border:"1px solid rgba(56,189,248,.2)",boxShadow:"0 0 30px rgba(56,189,248,.08)"}}>
-        <div ref={containerRef} style={{width:"100%",height:340,background:"#0a1628"}}/>
+        <div ref={containerRef} style={{width:"100%",height:200,background:"#0a1628"}}/>
         {!loaded && (
           <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"#0a1628"}}>
             <div style={{textAlign:"center"}}>
