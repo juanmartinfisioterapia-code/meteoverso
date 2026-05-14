@@ -183,16 +183,33 @@ function WorldMap({ onCitySelect }) {
       });
 
       // Base map - dark style
-      // CartoDB Voyager - free, no key, shows cities clearly
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      // CartoDB Dark Matter base
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {
         maxZoom: 20,
-        attribution: 'CartoDB'
       }).addTo(map);
 
-      // Futuristic neon tint
+      // Labels layer on top (city names)
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png', {
+        maxZoom: 20,
+      }).addTo(map);
+
+      // Neon style
       const style = document.createElement('style');
-      style.textContent = `.leaflet-tile-pane { filter: hue-rotate(195deg) saturate(1.8) brightness(0.85) contrast(1.1); }`;
+      style.textContent = `
+        .leaflet-tile-pane { filter: brightness(1.1) saturate(1.2); }
+        .leaflet-container { background: #000810 !important; }
+        .leaflet-control-zoom a { background: #0d1f35 !important; color: #38BDF8 !important; border-color: #38BDF8 !important; }
+      `;
       document.head.appendChild(style);
+
+      // Draw neon grid lines
+      const gridStyle = { color: '#38BDF8', weight: 0.3, opacity: 0.15, fillOpacity: 0 };
+      for (let lat = -80; lat <= 80; lat += 20) {
+        L.polyline([[lat, -180],[lat, 180]], gridStyle).addTo(map);
+      }
+      for (let lng = -180; lng <= 180; lng += 20) {
+        L.polyline([[-90, lng],[90, lng]], gridStyle).addTo(map);
+      }
 
       // Cloud layer from OpenWeatherMap (free, no key needed for tiles)
       L.tileLayer('https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=demo', {
