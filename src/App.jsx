@@ -31,7 +31,8 @@ const fmtTime = s => s ? s.slice(11,16) : "—";
 const MODELS = [
   {id:"best",  name:"Meteoverso",   badge:"RECOMENDADO", color:"#60A5FA", bg:"rgba(96,165,250,.08)",  br:"rgba(96,165,250,.28)",  tag:"🇪🇸 Mejor para España", param:"best_match",   primary:true},
   {id:"ecmwf", name:"El Tiempo.es", badge:"ECMWF",       color:"#38BDF8", bg:"rgba(56,189,248,.07)",  br:"rgba(56,189,248,.25)",  tag:"🇪🇺 Modelo Europeo",   param:"ecmwf_ifs025", primary:false},
-  {id:"icon",  name:"Windy.com",    badge:"ICON-EU",      color:"#93C5FD", bg:"rgba(147,197,253,.07)", br:"rgba(147,197,253,.22)", tag:"🇩🇪 Modelo Alemán",    param:"icon_seamless",primary:false},
+  {id:"icon",  name:"Windy.com",    badge:"ICON-EU",      color:"#93C5FD", bg:"rgba(147,197,253,.07)", br:"rgba(147,197,253,.22)", tag:"🇩🇪 Modelo Alemán",    param:"icon_seamless", primary:false},
+  {id:"aemet", name:"AEMET",        badge:"HARMONIE",     color:"#F97316", bg:"rgba(249,115,22,.07)",  br:"rgba(249,115,22,.25)",  tag:"🇪🇸 Oficial ES",       param:"best_match",    primary:false},
 ];
 
 const SECONDARY = MODELS.filter(m => !m.primary);
