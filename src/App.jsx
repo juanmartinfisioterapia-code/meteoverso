@@ -177,16 +177,22 @@ function WorldMap({ onCitySelect }) {
 
       const map = L.map(containerRef.current, {
         center: [40.4, -3.7],
-        zoom: 5,
+        zoom: 6,
         zoomControl: true,
         attributionControl: false,
       });
 
       // Base map - dark style
-      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Physical_Map/MapServer/tile/{z}/{y}/{x}', {
-        maxZoom: 19,
-        attribution: 'Esri'
+      // Futuristic dark map with city names - Stadia Alidade Smooth Dark
+      L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png', {
+        maxZoom: 20,
+        attribution: 'Stadia Maps'
       }).addTo(map);
+
+      // Add neon glow effect via CSS
+      const style = document.createElement('style');
+      style.textContent = `.leaflet-tile { filter: hue-rotate(180deg) saturate(2) brightness(0.9); }`;
+      document.head.appendChild(style);
 
       // Cloud layer from OpenWeatherMap (free, no key needed for tiles)
       L.tileLayer('https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=demo', {
