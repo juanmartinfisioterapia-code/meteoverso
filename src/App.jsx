@@ -183,15 +183,15 @@ function WorldMap({ onCitySelect }) {
       });
 
       // Base map - dark style
-      // Futuristic dark map with city names - Stadia Alidade Smooth Dark
-      L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png', {
+      // CartoDB Voyager - free, no key, shows cities clearly
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
         maxZoom: 20,
-        attribution: 'Stadia Maps'
+        attribution: 'CartoDB'
       }).addTo(map);
 
-      // Add neon glow effect via CSS
+      // Futuristic neon tint
       const style = document.createElement('style');
-      style.textContent = `.leaflet-tile { filter: hue-rotate(180deg) saturate(2) brightness(0.9); }`;
+      style.textContent = `.leaflet-tile-pane { filter: hue-rotate(195deg) saturate(1.8) brightness(0.85) contrast(1.1); }`;
       document.head.appendChild(style);
 
       // Cloud layer from OpenWeatherMap (free, no key needed for tiles)
