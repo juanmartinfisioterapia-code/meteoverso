@@ -30,9 +30,9 @@ const fmtTime = s => s ? s.slice(11,16) : "—";
 
 const MODELS = [
   {id:"best",  name:"Meteoverso",   badge:"RECOMENDADO", color:"#60A5FA", bg:"rgba(96,165,250,.08)",  br:"rgba(96,165,250,.28)",  tag:"🇪🇸 Mejor para España", param:"best_match",   primary:true},
-  {id:"aemet", name:"AEMET",        badge:"HARMONIE",     color:"#F97316", bg:"rgba(249,115,22,.07)",  br:"rgba(249,115,22,.3)",   tag:"🇪🇸 Météo-France · ES",  param:"aemet",         primary:false},
-  {id:"ecmwf", name:"El Tiempo.es", badge:"ECMWF",       color:"#38BDF8", bg:"rgba(56,189,248,.07)",  br:"rgba(56,189,248,.3)",   tag:"🇪🇺 Modelo Europeo",   param:"ecmwf_ifs025", primary:false},
-  {id:"icon",  name:"Windy.com",    badge:"ICON-EU",      color:"#93C5FD", bg:"rgba(147,197,253,.07)", br:"rgba(147,197,253,.3)",  tag:"🇩🇪 Modelo Alemán",    param:"icon_seamless", primary:false},
+  {id:"ecmwf", name:"El Tiempo.es", badge:"ECMWF",       color:"#38BDF8", bg:"rgba(56,189,248,.07)",  br:"rgba(56,189,248,.25)",  tag:"🇪🇺 Modelo Europeo",   param:"ecmwf_ifs025", primary:false},
+  {id:"icon",  name:"Windy.com",    badge:"ICON-EU",      color:"#93C5FD", bg:"rgba(147,197,253,.07)", br:"rgba(147,197,253,.22)", tag:"🇩🇪 Modelo Alemán",    param:"icon_seamless", primary:false},
+  {id:"aemet", name:"AEMET",        badge:"OFICIAL ES",   color:"#F97316", bg:"rgba(249,115,22,.07)",  br:"rgba(249,115,22,.25)",  tag:"🇪🇸 Datos oficiales",  param:"aemet",         primary:false},
 ];
 
 const SECONDARY = MODELS.filter(m => !m.primary);
@@ -46,15 +46,16 @@ async function fetchGeo(q) {
 
 
 async function fetchAEMET(lat, lon) {
-  // Use our own Vercel serverless proxy to bypass CORS
-  const proxy = (endpoint) =>
-    `/api/aemet?endpoint=${encodeURIComponent(endpoint)}`;
+  const key = import.meta.env.VITE_AEMET_KEY;
+  if (!key) throw new Error("Sin API key de AEMET");
 
-  // Step 1: Get municipalities
-  const muniRes = await fetch(proxy('https://opendata.aemet.es/opendata/api/maestro/municipios'));
-  if (!muniRes.ok) throw new Error("Proxy error " + muniRes.status);
-  const muniData = await muniRes.json();
-  const towns = muniData.data;
+  // Step 1: Get list of municipalities to find closest
+  const muniRes = await fetch(
+    `https://opendata.aemet.es/opendata/api/maestro/municipios?api_key=${key}`,
+    { headers: { "Accept": "application/json" } }
+  );
+  if (!muniRes.ok) throw new Error("AEMET key inválida");
+  const towns = await muniRes.json();
   if (!Array.isArray(towns)) throw new Error("Sin municipios");
 
   // Find closest municipality
@@ -69,15 +70,39 @@ async function fetchAEMET(lat, lon) {
   const code = best.id.replace("id", "");
 
   // Step 2: Get hourly forecast
-  const predRes = await fetch(proxy(`https://opendata.aemet.es/opendata/api/prediccion/especifica/municipio/horaria/${code}`));
-  if (!predRes.ok) throw new Error("Predicción error " + predRes.status);
-  const predData = await predRes.json();
-  const raw = predData.data;
-  if (!raw || !Array.isArray(raw)) throw new Error("Sin datos predicción");
+  const predRes = await fetch(
+    `https://opendata.aemet.es/opendata/api/prediccion/especifica/municipio/horaria/${code}?api_key=${key}`,
+    { headers: { "Accept": "application/json" } }
+  );
+  const meta = await predRes.json();
+  if (!meta.datos) throw new Error("Sin datos AEMET");
+  const raw = await (await fetch(meta.datos)).json();
 
   const now = new Date();
   const days = raw[0]?.prediccion?.dia ?? [];
-  if (!days.length) throw new Error("Sin días");
+  let cDay = null, cH = null, cDiff = Infinity;
+  for (const day of days) {
+    for (const h of (day.temperatura ?? [])) {
+      const p = String(h.periodo).padStart(2, "0");
+      const t = new Date(`${day.fecha}T${p}:00:00`);
+      const diff = Math.abs(t - now);
+      if (diff < cDiff) { cDiff = diff; cDay = day; cH = parseInt(h.periodo); }
+    }
+  }
+  if (!cDay) throw new Error("Sin datos horarios AEMET");
+
+  const gh = (arr, h) => arr?.find(x => parseInt(x.periodo) === h)?.value ?? null;
+  const gr = (arr, h) => {
+    if (!arr) return null;
+    const v = arr.find(x => {
+      if (String(x.periodo).includes("-")) {
+        const [a, b] = x.periodo.split("-").map(Number);
+        return h >= a && h <= b;
+      }
+      return parseInt(x.periodo) === h;
+    });
+    return v?.value ?? null;
+  };
 
   const AEMET_SKY = {
     "11":{icon:"☀️",label:"Despejado"},"12":{icon:"🌤️",label:"Poco nublado"},
@@ -89,95 +114,76 @@ async function fetchAEMET(lat, lon) {
     "51":{icon:"⛈️",label:"Tormenta"},"54":{icon:"⛈️",label:"Cubierto+tormenta"},
     "61":{icon:"🌫️",label:"Niebla"},"62":{icon:"🌫️",label:"Bruma"},
   };
-  const getSky = c => AEMET_SKY[String(c??'').replace(/^0+/,"").trim()] ?? {icon:"🌡️",label:"Variable"};
 
-  const byHour = (arr, h) => arr?.find(x => parseInt(x.periodo) === h)?.value ?? null;
-  const byRange = (arr, h) => {
-    if (!arr) return null;
-    const v = arr.find(x => {
-      const p = String(x.periodo);
-      if (p.includes("-")) { const [a,b]=p.split("-").map(Number); return h>=a&&h<b; }
-      return parseInt(p)===h;
-    });
-    return v?.value ?? null;
-  };
-  const getWind = (day, h) => {
-    const entry = (day.vientoAndRachaMax??[]).find(v => {
-      const p = String(v.periodo);
-      if (p.includes("-")) { const [a,b]=p.split("-").map(Number); return h>=a&&h<b; }
-      return parseInt(p)===h;
-    });
-    return entry?.velocidad?.[0]?.value ?? 0;
-  };
+  const windArr = cDay.vientoAndRachaMax?.map(v => ({ periodo: v.periodo, value: v.velocidad?.[0]?.value }));
+  const skyCode = gr(cDay.estadoCielo, cH);
+  const skyInfo = AEMET_SKY[String(skyCode).replace(/^0+/, "")] ?? { icon:"🌡️", label:"Variable" };
 
-  // Current hour
-  let cDay=null, cH=null, cDiff=Infinity;
-  for (const day of days) {
-    for (const h of (day.temperatura??[])) {
-      const t = new Date(`${day.fecha}T${String(parseInt(h.periodo)).padStart(2,"0")}:00:00`);
-      const diff = Math.abs(t-now);
-      if (diff<cDiff) { cDiff=diff; cDay=day; cH=parseInt(h.periodo); }
-    }
-  }
-  if (!cDay) throw new Error("Sin hora actual");
-
-  // Hourly
+  // Build hourly data from AEMET
   const hourly = [];
   for (const day of days) {
-    for (const h of (day.temperatura??[])) {
+    for (const h of (day.temperatura ?? [])) {
       const hp = parseInt(h.periodo);
       const t = new Date(`${day.fecha}T${String(hp).padStart(2,"0")}:00:00`);
-      if (t<now||hourly.length>=24) continue;
-      const tempVal = Number(h.value);
-      if (isNaN(tempVal)) continue;
-      hourly.push({
-        time: t,
-        temp: Math.round(tempVal),
-        feels: Math.round(Number(byHour(day.sensTermica,hp)??tempVal)),
-        precip: +(Number(byRange(day.precipitacion,hp)??0)).toFixed(1),
-        precipProb: Math.round(Number(byRange(day.probPrecipitacion,hp)??byRange(day.precipitacion,hp)??0)),
-        wind: Math.round(Number(getWind(day,hp))),
-        windD: 0,
-        humidity: Math.round(Number(byHour(day.humedadRelativa,hp)??60)),
-        info: getSky(byRange(day.estadoCielo,hp)??byHour(day.estadoCielo,hp)),
-      });
+      if (t >= now && hourly.length < 24) {
+        const precipP = gr(day.precipitacion, hp);
+        const precipProb = gr(day.probPrecipitacion ?? day.precipitacion, hp);
+        hourly.push({
+          time: t,
+          temp: Math.round(Number(h.value)),
+          feels: Math.round(Number(gh(day.sensTermica, hp) ?? h.value)),
+          precip: precipP != null ? +Number(precipP).toFixed(1) : 0,
+          precipProb: precipProb != null ? Math.round(Number(precipProb)) : 0,
+          wind: Math.round(Number(gh(windArr, hp) ?? 0)),
+          windD: 0,
+          humidity: Math.round(Number(gh(day.humedadRelativa, hp) ?? 60)),
+          info: AEMET_SKY[String(gr(day.estadoCielo, hp)).replace(/^0+/,"")] ?? {icon:"🌡️",label:"Variable"},
+        });
+      }
     }
   }
 
-  // Daily
+  // Build daily data
   const daily = [];
   for (const day of days) {
-    const temps = (day.temperatura??[]).map(t=>Number(t.value)).filter(v=>!isNaN(v));
-    if (!temps.length) continue;
+    const temps = day.temperatura ?? [];
+    const maxT = temps.length ? Math.max(...temps.map(t => Number(t.value))) : 0;
+    const minT = temps.length ? Math.min(...temps.map(t => Number(t.value))) : 0;
     daily.push({
-      date: new Date(day.fecha+"T12:00:00"),
-      tempMax: Math.round(Math.max(...temps)),
-      tempMin: Math.round(Math.min(...temps)),
+      date: new Date(day.fecha + "T12:00:00"),
+      tempMax: Math.round(maxT),
+      tempMin: Math.round(minT),
       precip: 0,
-      precipProb: Math.round(Number(byRange(day.probPrecipitacion,12)??0)),
-      wind: Math.round(Number(getWind(day,12))),
+      precipProb: Math.round(Number(gr(day.probPrecipitacion ?? day.precipitacion, 12) ?? 0)),
+      wind: Math.round(Number(gh(windArr, 12) ?? 0)),
       windD: 0,
       uv: null,
-      sunrise: day.ortoSol??null,
-      sunset: day.ocasoSol??null,
-      info: getSky(byRange(day.estadoCielo,12)??byHour(day.estadoCielo,12)),
+      sunrise: day.ortoSol ?? null,
+      sunset: day.ocasoSol ?? null,
+      info: AEMET_SKY[String(gr(day.estadoCielo, 12)).replace(/^0+/,"")] ?? {icon:"🌡️",label:"Variable"},
     });
   }
 
+  const temp     = gh(cDay.temperatura, cH);
+  const feels    = gh(cDay.sensTermica, cH);
+  const humidity = gh(cDay.humedadRelativa, cH);
+  const wind     = gh(windArr, cH);
+  const precip   = gr(cDay.precipitacion, cH);
+
   return {
-    temp:     Math.round(Number(byHour(cDay.temperatura,cH)??0)),
-    feels:    Math.round(Number(byHour(cDay.sensTermica,cH)??0)),
-    humidity: Math.round(Number(byHour(cDay.humedadRelativa,cH)??60)),
-    wind:     Math.round(Number(getWind(cDay,cH))),
+    temp:     temp     != null ? Math.round(Number(temp))     : null,
+    feels:    feels    != null ? Math.round(Number(feels))    : null,
+    humidity: humidity != null ? Math.round(Number(humidity)) : null,
+    wind:     wind     != null ? Math.round(Number(wind))     : null,
     windD:    0,
-    precip:   +(Number(byRange(cDay.precipitacion,cH)??0)).toFixed(1),
+    precip:   precip   != null ? +Number(precip).toFixed(1)   : 0,
     pressure: null,
     vis:      null,
     uv:       null,
-    info:     getSky(byRange(cDay.estadoCielo,cH)??byHour(cDay.estadoCielo,cH)),
+    info:     skyInfo,
     hourly,
     daily,
-    town: best.nombre,
+    town:     best.nombre,
   };
 }
 
@@ -349,8 +355,14 @@ function WorldMap({ onCitySelect }) {
         L.polyline([[-90, lng],[90, lng]], gridStyle).addTo(map);
       }
 
-      // Rain radar layer from RainViewer (free, no key needed)
-      L.tileLayer('https://tilecache.rainviewer.com/v2/radar/nowcast/256/{z}/{x}/{y}/2/1_1.png', {
+      // Cloud layer from OpenWeatherMap (free, no key needed for tiles)
+      L.tileLayer('https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=demo', {
+        opacity: 0.5,
+        maxZoom: 19,
+      }).addTo(map);
+
+      // Rain layer
+      L.tileLayer('https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=demo', {
         opacity: 0.4,
         maxZoom: 19,
       }).addTo(map);
@@ -454,9 +466,9 @@ function VeredictoBox({ text, loading, type }) {
 function CompareButton({ model, expanded, onClick }) {
   return (
     <button onClick={onClick}
-      style={{display:"inline-flex",alignItems:"center",gap:6,background:expanded?`${model.color}22`:"rgba(255,255,255,.06)",border:`1.5px solid ${expanded?model.color:"rgba(255,255,255,.25)"}`,borderRadius:20,padding:"7px 16px",cursor:"pointer",transition:"all .2s",fontFamily:"'DM Sans',sans-serif"}}>
-      <span style={{color:expanded?model.color:"#e0f2fe",fontSize:13,fontWeight:600}}>{model.name}</span>
-      <span style={{color:expanded?model.color:"#94a3b8",fontSize:10}}>{expanded?"▲":"▼"}</span>
+      style={{display:"inline-flex",alignItems:"center",gap:6,background:expanded?`${model.color}18`:"rgba(255,255,255,.04)",border:`1px solid ${expanded?model.color:"rgba(255,255,255,.1)"}`,borderRadius:20,padding:"6px 14px",cursor:"pointer",transition:"all .2s",fontFamily:"'DM Sans',sans-serif"}}>
+      <span style={{color:expanded?model.color:"#475569",fontSize:12,fontWeight:600}}>{model.name}</span>
+      <span style={{color:expanded?model.color:"#334155",fontSize:10}}>{expanded?"▲":"▼"}</span>
     </button>
   );
 }
@@ -491,8 +503,8 @@ function PrimaryCurrentCard({ data, loading }) {
           {e:"👁️",l:"Visib.",v:data.vis!=null?`${data.vis}km`:"—"},
         ].map(({e,l,v})=>(
           <div key={l} style={{background:"rgba(255,255,255,.03)",borderRadius:10,padding:"8px 10px"}}>
-            <div style={{color:"#93c5fd",fontSize:11,textTransform:"uppercase",letterSpacing:".06em",marginBottom:3,fontWeight:600}}>{e} {l}</div>
-            <div style={{color:"#ffffff",fontSize:15,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{v}</div>
+            <div style={{color:"#1e4060",fontSize:9,textTransform:"uppercase",letterSpacing:".05em",marginBottom:2}}>{e} {l}</div>
+            <div style={{color:"#bae6fd",fontSize:13,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{v}</div>
           </div>
         ))}
       </div>
@@ -513,7 +525,7 @@ function SecondaryCurrentCard({ model, data }) {
         {[{l:"Sensación",v:`${data.feels}°`},{l:"Humedad",v:`${data.humidity}%`},{l:"Viento",v:`${data.wind}km/h`},{l:"Precip.",v:`${data.precip}mm`}].map(({l,v})=>(
           <div key={l}>
             <div style={{color:"#0f2035",fontSize:9,textTransform:"uppercase",letterSpacing:".04em"}}>{l}</div>
-            <div style={{color:"#ffffff",fontSize:14,fontWeight:600,fontFamily:"'DM Mono',monospace"}}>{v}</div>
+            <div style={{color:"#bae6fd",fontSize:12,fontWeight:600,fontFamily:"'DM Mono',monospace"}}>{v}</div>
           </div>
         ))}
       </div>
@@ -530,6 +542,9 @@ export default function App() {
   const [status,     setStatus]     = useState("idle");
   const [errMsg,     setErrMsg]     = useState("");
   const [geoLoading, setGeoLoading] = useState(false);
+  const [recentCities, setRecentCities] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('mv_recent') || '[]'); } catch { return []; }
+  });
   const [recentCities, setRecentCities] = useState(() => {
     try { return JSON.parse(localStorage.getItem('mv_recent') || '[]'); } catch { return []; }
   });
@@ -583,8 +598,6 @@ export default function App() {
       return updated;
     });
     const results = {};
-
-    // Load all models in parallel - all fast now
     await Promise.all(MODELS.map(async m => {
       try {
         if (m.id === "aemet") {
