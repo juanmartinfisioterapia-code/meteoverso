@@ -553,18 +553,28 @@ export default function App() {
       return updated;
     });
     const results = {};
-    await Promise.all(MODELS.map(async m => {
-      try {
-        if (m.id === "aemet") {
-          results[m.id] = await fetchAEMET(lat, lon);
-        } else {
-          results[m.id] = await fetchWeather(lat, lon, m.param);
-        }
-      } catch(e) { results[m.id] = { error: e.message }; }
+
+    // Load fast models first (Open-Meteo)
+    await Promise.all(MODELS.filter(m => m.id !== "aemet").map(async m => {
+      try { results[m.id] = await fetchWeather(lat, lon, m.param); }
+      catch(e) { results[m.id] = { error: e.message }; }
     }));
-    setData(results);
+
+    // Show results immediately without waiting for AEMET
+    setData({...results});
     setStatus(Object.values(results).some(d=>d?.temp!=null) ? "done" : "error");
     saveRecent(lat, lon, name, [name].join(', '));
+
+    // Load AEMET in background
+    fetchAEMET(lat, lon)
+      .then(aemetData => {
+        results["aemet"] = aemetData;
+        setData(prev => ({...prev, aemet: aemetData}));
+      })
+      .catch(e => {
+        results["aemet"] = { error: e.message };
+        setData(prev => ({...prev, aemet: { error: e.message }}));
+      });
     // Generate 3 veredictos in parallel
     const [vn, v2, v7] = await Promise.all([
       generateVeredicto(results, name, "now"),
