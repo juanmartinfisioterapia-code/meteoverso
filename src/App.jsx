@@ -127,17 +127,22 @@ async function fetchAEMET(lat, lon) {
       const t = new Date(`${day.fecha}T${String(hp).padStart(2,"0")}:00:00`);
       if (t >= now && hourly.length < 24) {
         const precipP = gr(day.precipitacion, hp);
-        const precipProb = gr(day.probPrecipitacion ?? day.precipitacion, hp);
+        const precipProb = gr(day.probPrecipitacion, hp) ?? gr(day.precipitacion, hp);
+        const skyRaw = gr(day.estadoCielo, hp);
+        const skyKey = skyRaw != null ? String(skyRaw).replace(/^0+/, "") : "";
+        const skyInfo = AEMET_SKY[skyKey] ?? {icon:"🌡️", label:"Variable"};
+        const tempVal = Number(h.value);
+        if (isNaN(tempVal)) continue;
         hourly.push({
           time: t,
-          temp: Math.round(Number(h.value)),
-          feels: Math.round(Number(gh(day.sensTermica, hp) ?? h.value)),
+          temp: Math.round(tempVal),
+          feels: Math.round(Number(gh(day.sensTermica, hp) ?? tempVal)),
           precip: precipP != null ? +Number(precipP).toFixed(1) : 0,
           precipProb: precipProb != null ? Math.round(Number(precipProb)) : 0,
           wind: Math.round(Number(gh(windArr, hp) ?? 0)),
           windD: 0,
           humidity: Math.round(Number(gh(day.humedadRelativa, hp) ?? 60)),
-          info: AEMET_SKY[String(gr(day.estadoCielo, hp)).replace(/^0+/,"")] ?? {icon:"🌡️",label:"Variable"},
+          info: skyInfo,
         });
       }
     }
@@ -146,21 +151,25 @@ async function fetchAEMET(lat, lon) {
   // Build daily data
   const daily = [];
   for (const day of days) {
-    const temps = day.temperatura ?? [];
-    const maxT = temps.length ? Math.max(...temps.map(t => Number(t.value))) : 0;
-    const minT = temps.length ? Math.min(...temps.map(t => Number(t.value))) : 0;
+    const temps = (day.temperatura ?? []).map(t => Number(t.value)).filter(v => !isNaN(v));
+    const maxT = temps.length ? Math.max(...temps) : 0;
+    const minT = temps.length ? Math.min(...temps) : 0;
+    const daySkyRaw = gr(day.estadoCielo, 12);
+    const daySkyKey = daySkyRaw != null ? String(daySkyRaw).replace(/^0+/, "") : "";
+    const daySkyInfo = AEMET_SKY[daySkyKey] ?? {icon:"🌡️", label:"Variable"};
+    const precipProb = gr(day.probPrecipitacion, 12) ?? gr(day.precipitacion, 12);
     daily.push({
       date: new Date(day.fecha + "T12:00:00"),
       tempMax: Math.round(maxT),
       tempMin: Math.round(minT),
       precip: 0,
-      precipProb: Math.round(Number(gr(day.probPrecipitacion ?? day.precipitacion, 12) ?? 0)),
+      precipProb: Math.round(Number(precipProb ?? 0)),
       wind: Math.round(Number(gh(windArr, 12) ?? 0)),
       windD: 0,
       uv: null,
       sunrise: day.ortoSol ?? null,
       sunset: day.ocasoSol ?? null,
-      info: AEMET_SKY[String(gr(day.estadoCielo, 12)).replace(/^0+/,"")] ?? {icon:"🌡️",label:"Variable"},
+      info: daySkyInfo,
     });
   }
 
