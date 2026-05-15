@@ -3,24 +3,42 @@
   "short_name": "Meteoverso",
   "description": "Comparador meteorológico científico. Tres modelos. Un consenso.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
   "background_color": "#06101e",
-  "theme_color": "#38BDF8",
-  "orientation": "portrait",
+  "theme_color": "#06101e",
+  "orientation": "portrait-primary",
+  "lang": "es",
+  "dir": "ltr",
+  "categories": ["weather", "utilities"],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/icon-512.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
-  "categories": ["weather", "utilities"],
-  "lang": "es",
-  "dir": "ltr"
+  "screenshots": [
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "narrow"
+    }
+  ]
 }
