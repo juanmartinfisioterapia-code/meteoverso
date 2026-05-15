@@ -503,8 +503,8 @@ function PrimaryCurrentCard({ data, loading }) {
           {e:"👁️",l:"Visib.",v:data.vis!=null?`${data.vis}km`:"—"},
         ].map(({e,l,v})=>(
           <div key={l} style={{background:"rgba(255,255,255,.03)",borderRadius:10,padding:"8px 10px"}}>
-            <div style={{color:"#1e4060",fontSize:9,textTransform:"uppercase",letterSpacing:".05em",marginBottom:2}}>{e} {l}</div>
-            <div style={{color:"#bae6fd",fontSize:13,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{v}</div>
+            <div style={{color:"#7dd3fc",fontSize:11,textTransform:"uppercase",letterSpacing:".05em",marginBottom:2}}>{e} {l}</div>
+            <div style={{color:"#ffffff",fontSize:15,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{v}</div>
           </div>
         ))}
       </div>
@@ -525,7 +525,7 @@ function SecondaryCurrentCard({ model, data }) {
         {[{l:"Sensación",v:`${data.feels}°`},{l:"Humedad",v:`${data.humidity}%`},{l:"Viento",v:`${data.wind}km/h`},{l:"Precip.",v:`${data.precip}mm`}].map(({l,v})=>(
           <div key={l}>
             <div style={{color:"#0f2035",fontSize:9,textTransform:"uppercase",letterSpacing:".04em"}}>{l}</div>
-            <div style={{color:"#bae6fd",fontSize:12,fontWeight:600,fontFamily:"'DM Mono',monospace"}}>{v}</div>
+            <div style={{color:"#ffffff",fontSize:14,fontWeight:600,fontFamily:"'DM Mono',monospace"}}>{v}</div>
           </div>
         ))}
       </div>
