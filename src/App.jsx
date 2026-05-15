@@ -497,7 +497,10 @@ export default function App() {
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
+  const skipDrop = useRef(false);
+
   useEffect(() => {
+    if (skipDrop.current) { skipDrop.current = false; return; }
     if (input.length < 2) { setDrops([]); setShowDrop(false); return; }
     clearTimeout(deb.current);
     deb.current = setTimeout(async () => {
@@ -575,7 +578,7 @@ export default function App() {
   };
 
   const quickCity = async city => {
-    setInput(city); setShowDrop(false); setDrops([]); setStatus("searching");
+    skipDrop.current=true; setInput(city); setShowDrop(false); setDrops([]); setStatus("searching");
     try {
       const r = await fetchGeo(city);
       if (r[0]) { const c=r[0]; setInput([c.name,c.admin1,c.country].filter(Boolean).join(", ")); runModels(c.latitude,c.longitude,c.name); }
@@ -713,7 +716,7 @@ export default function App() {
                 <div style={{display:"flex",gap:6,justifyContent:"center",flexWrap:"wrap"}}>
                   {recentCities.map((city,i)=>(
                     <div key={i} style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
-                      <button onClick={()=>{ setInput(city.label||city.name); setShowDrop(false); setDrops([]); runModels(city.lat,city.lon,city.name); }} className="city-pill"
+                      <button onClick={()=>{ skipDrop.current=true; setShowDrop(false); setDrops([]); setInput(city.name); runModels(city.lat,city.lon,city.name); }} className="city-pill"
                         style={{background:"rgba(56,189,248,.08)",border:"1px solid rgba(56,189,248,.25)",borderRadius:30,padding:"6px 15px 6px 12px",color:"#e0f2fe",fontSize:13,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",transition:"all .15s",fontWeight:500,display:"flex",alignItems:"center",gap:5}}>
                         <span style={{fontSize:10,opacity:.6}}>📍</span>{city.name}
                       </button>
