@@ -32,7 +32,7 @@ const MODELS = [
   {id:"best",  name:"Meteoverso",   badge:"RECOMENDADO", color:"#60A5FA", bg:"rgba(96,165,250,.08)",  br:"rgba(96,165,250,.28)",  tag:"🇪🇸 Mejor para España", param:"best_match",   primary:true},
   {id:"ecmwf", name:"El Tiempo.es", badge:"ECMWF",       color:"#38BDF8", bg:"rgba(56,189,248,.07)",  br:"rgba(56,189,248,.25)",  tag:"🇪🇺 Modelo Europeo",   param:"ecmwf_ifs025", primary:false},
   {id:"icon",  name:"Windy.com",    badge:"ICON-EU",      color:"#93C5FD", bg:"rgba(147,197,253,.07)", br:"rgba(147,197,253,.22)", tag:"🇩🇪 Modelo Alemán",    param:"icon_seamless", primary:false},
-  {id:"aemet", name:"AEMET",        badge:"HARMONIE",     color:"#F97316", bg:"rgba(249,115,22,.07)",  br:"rgba(249,115,22,.25)",  tag:"🇪🇸 Oficial ES",       param:"best_match",    primary:false},
+  {id:"aemet", name:"AEMET",        badge:"OFICIAL ES",   color:"#F97316", bg:"rgba(249,115,22,.07)",  br:"rgba(249,115,22,.25)",  tag:"🇪🇸 Datos oficiales",  param:"aemet",         primary:false},
 ];
 
 const SECONDARY = MODELS.filter(m => !m.primary);
@@ -42,6 +42,149 @@ async function fetchGeo(q) {
   const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=6&language=es&format=json`);
   if (!r.ok) throw new Error("HTTP " + r.status);
   return (await r.json()).results ?? [];
+}
+
+
+async function fetchAEMET(lat, lon) {
+  const key = import.meta.env.VITE_AEMET_KEY;
+  if (!key) throw new Error("Sin API key de AEMET");
+
+  // Step 1: Get list of municipalities to find closest
+  const muniRes = await fetch(
+    `https://opendata.aemet.es/opendata/api/maestro/municipios?api_key=${key}`,
+    { headers: { "Accept": "application/json" } }
+  );
+  if (!muniRes.ok) throw new Error("AEMET key inválida");
+  const towns = await muniRes.json();
+  if (!Array.isArray(towns)) throw new Error("Sin municipios");
+
+  // Find closest municipality
+  let best = null, bestD = Infinity;
+  for (const t of towns) {
+    const tLat = parseFloat(t.latitud_dec ?? t.latitud ?? 0);
+    const tLon = parseFloat(t.longitud_dec ?? t.longitud ?? 0);
+    const d = Math.hypot(tLat - lat, tLon - lon);
+    if (d < bestD) { bestD = d; best = t; }
+  }
+  if (!best) throw new Error("Sin municipio cercano");
+  const code = best.id.replace("id", "");
+
+  // Step 2: Get hourly forecast
+  const predRes = await fetch(
+    `https://opendata.aemet.es/opendata/api/prediccion/especifica/municipio/horaria/${code}?api_key=${key}`,
+    { headers: { "Accept": "application/json" } }
+  );
+  const meta = await predRes.json();
+  if (!meta.datos) throw new Error("Sin datos AEMET");
+  const raw = await (await fetch(meta.datos)).json();
+
+  const now = new Date();
+  const days = raw[0]?.prediccion?.dia ?? [];
+  let cDay = null, cH = null, cDiff = Infinity;
+  for (const day of days) {
+    for (const h of (day.temperatura ?? [])) {
+      const p = String(h.periodo).padStart(2, "0");
+      const t = new Date(`${day.fecha}T${p}:00:00`);
+      const diff = Math.abs(t - now);
+      if (diff < cDiff) { cDiff = diff; cDay = day; cH = parseInt(h.periodo); }
+    }
+  }
+  if (!cDay) throw new Error("Sin datos horarios AEMET");
+
+  const gh = (arr, h) => arr?.find(x => parseInt(x.periodo) === h)?.value ?? null;
+  const gr = (arr, h) => {
+    if (!arr) return null;
+    const v = arr.find(x => {
+      if (String(x.periodo).includes("-")) {
+        const [a, b] = x.periodo.split("-").map(Number);
+        return h >= a && h <= b;
+      }
+      return parseInt(x.periodo) === h;
+    });
+    return v?.value ?? null;
+  };
+
+  const AEMET_SKY = {
+    "11":{icon:"☀️",label:"Despejado"},"12":{icon:"🌤️",label:"Poco nublado"},
+    "13":{icon:"⛅",label:"Intervalos nubosos"},"14":{icon:"☁️",label:"Nublado"},
+    "15":{icon:"☁️",label:"Muy nublado"},"16":{icon:"☁️",label:"Cubierto"},
+    "23":{icon:"🌦️",label:"Intervalos+lluvia"},"24":{icon:"🌧️",label:"Nublado+lluvia"},
+    "26":{icon:"🌧️",label:"Cubierto+lluvia"},"36":{icon:"❄️",label:"Cubierto+nieve"},
+    "43":{icon:"🌦️",label:"Chubascos"},"46":{icon:"🌧️",label:"Cubierto+chubascos"},
+    "51":{icon:"⛈️",label:"Tormenta"},"54":{icon:"⛈️",label:"Cubierto+tormenta"},
+    "61":{icon:"🌫️",label:"Niebla"},"62":{icon:"🌫️",label:"Bruma"},
+  };
+
+  const windArr = cDay.vientoAndRachaMax?.map(v => ({ periodo: v.periodo, value: v.velocidad?.[0]?.value }));
+  const skyCode = gr(cDay.estadoCielo, cH);
+  const skyInfo = AEMET_SKY[String(skyCode).replace(/^0+/, "")] ?? { icon:"🌡️", label:"Variable" };
+
+  // Build hourly data from AEMET
+  const hourly = [];
+  for (const day of days) {
+    for (const h of (day.temperatura ?? [])) {
+      const hp = parseInt(h.periodo);
+      const t = new Date(`${day.fecha}T${String(hp).padStart(2,"0")}:00:00`);
+      if (t >= now && hourly.length < 24) {
+        const precipP = gr(day.precipitacion, hp);
+        const precipProb = gr(day.probPrecipitacion ?? day.precipitacion, hp);
+        hourly.push({
+          time: t,
+          temp: Math.round(Number(h.value)),
+          feels: Math.round(Number(gh(day.sensTermica, hp) ?? h.value)),
+          precip: precipP != null ? +Number(precipP).toFixed(1) : 0,
+          precipProb: precipProb != null ? Math.round(Number(precipProb)) : 0,
+          wind: Math.round(Number(gh(windArr, hp) ?? 0)),
+          windD: 0,
+          humidity: Math.round(Number(gh(day.humedadRelativa, hp) ?? 60)),
+          info: AEMET_SKY[String(gr(day.estadoCielo, hp)).replace(/^0+/,"")] ?? {icon:"🌡️",label:"Variable"},
+        });
+      }
+    }
+  }
+
+  // Build daily data
+  const daily = [];
+  for (const day of days) {
+    const temps = day.temperatura ?? [];
+    const maxT = temps.length ? Math.max(...temps.map(t => Number(t.value))) : 0;
+    const minT = temps.length ? Math.min(...temps.map(t => Number(t.value))) : 0;
+    daily.push({
+      date: new Date(day.fecha + "T12:00:00"),
+      tempMax: Math.round(maxT),
+      tempMin: Math.round(minT),
+      precip: 0,
+      precipProb: Math.round(Number(gr(day.probPrecipitacion ?? day.precipitacion, 12) ?? 0)),
+      wind: Math.round(Number(gh(windArr, 12) ?? 0)),
+      windD: 0,
+      uv: null,
+      sunrise: day.ortoSol ?? null,
+      sunset: day.ocasoSol ?? null,
+      info: AEMET_SKY[String(gr(day.estadoCielo, 12)).replace(/^0+/,"")] ?? {icon:"🌡️",label:"Variable"},
+    });
+  }
+
+  const temp     = gh(cDay.temperatura, cH);
+  const feels    = gh(cDay.sensTermica, cH);
+  const humidity = gh(cDay.humedadRelativa, cH);
+  const wind     = gh(windArr, cH);
+  const precip   = gr(cDay.precipitacion, cH);
+
+  return {
+    temp:     temp     != null ? Math.round(Number(temp))     : null,
+    feels:    feels    != null ? Math.round(Number(feels))    : null,
+    humidity: humidity != null ? Math.round(Number(humidity)) : null,
+    wind:     wind     != null ? Math.round(Number(wind))     : null,
+    windD:    0,
+    precip:   precip   != null ? +Number(precip).toFixed(1)   : 0,
+    pressure: null,
+    vis:      null,
+    uv:       null,
+    info:     skyInfo,
+    hourly,
+    daily,
+    town:     best.nombre,
+  };
 }
 
 async function fetchWeather(lat, lon, param) {
@@ -399,6 +542,12 @@ export default function App() {
   const [status,     setStatus]     = useState("idle");
   const [errMsg,     setErrMsg]     = useState("");
   const [geoLoading, setGeoLoading] = useState(false);
+  const [recentCities, setRecentCities] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('mv_recent') || '[]'); } catch { return []; }
+  });
+  const [recentCities, setRecentCities] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('mv_recent') || '[]'); } catch { return []; }
+  });
   const [vNow,       setVNow]       = useState("");
   const [v24h,       setV24h]       = useState("");
   const [v7d,        setV7d]        = useState("");
@@ -425,19 +574,42 @@ export default function App() {
     return () => clearTimeout(deb.current);
   }, [input]);
 
+  const saveRecent = (lat, lon, name, label) => {
+    const city = { lat, lon, name, label };
+    setRecentCities(prev => {
+      const filtered = prev.filter(c => c.name !== name);
+      const updated = [city, ...filtered].slice(0, 6);
+      try { localStorage.setItem('mv_recent', JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+  };
+
   const runModels = async (lat, lon, name) => {
     setShowDrop(false); setLoc({lat,lon,name}); setData({});
     setStatus("loading"); setErrMsg("");
     setVNow(""); setV24h(""); setV7d("");
     setVLoad({now:true,"24h":true,"7d":true});
     setExpanded({});
+    // Save to recent cities
+    setRecentCities(prev => {
+      const filtered = prev.filter(c => c.name !== name);
+      const updated = [{ name, lat, lon }, ...filtered].slice(0, 6);
+      try { localStorage.setItem('mv_recent', JSON.stringify(updated)); } catch {}
+      return updated;
+    });
     const results = {};
     await Promise.all(MODELS.map(async m => {
-      try   { results[m.id] = await fetchWeather(lat, lon, m.param); }
-      catch(e) { results[m.id] = { error: e.message }; }
+      try {
+        if (m.id === "aemet") {
+          results[m.id] = await fetchAEMET(lat, lon);
+        } else {
+          results[m.id] = await fetchWeather(lat, lon, m.param);
+        }
+      } catch(e) { results[m.id] = { error: e.message }; }
     }));
     setData(results);
     setStatus(Object.values(results).some(d=>d?.temp!=null) ? "done" : "error");
+    saveRecent(lat, lon, name, [name].join(', '));
     // Generate 3 veredictos in parallel
     const [vn, v2, v7] = await Promise.all([
       generateVeredicto(results, name, "now"),
@@ -601,14 +773,36 @@ export default function App() {
         {/* QUICK CITIES */}
         {status==="idle"&&!showDrop&&(
           <div style={{animation:"fadeUp .5s ease .12s both"}}>
-            <div style={{display:"flex",gap:6,justifyContent:"center",flexWrap:"wrap",marginBottom:20}}>
-              {CITIES.map(city=>(
-                <button key={city} onClick={()=>quickCity(city)} className="city-pill"
-                  style={{background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.3)",borderRadius:30,padding:"6px 15px",color:"#e0f2fe",fontSize:13,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",transition:"all .15s",fontWeight:500}}>
-                  {city}
-                </button>
-              ))}
-            </div>
+            {recentCities.length > 0 ? (
+              <div style={{marginBottom:20}}>
+                <div style={{color:"#1e3a5f",fontSize:10,textTransform:"uppercase",letterSpacing:".1em",fontFamily:"'DM Mono',monospace",marginBottom:10,textAlign:"center"}}>🕐 Búsquedas recientes</div>
+                <div style={{display:"flex",gap:6,justifyContent:"center",flexWrap:"wrap"}}>
+                  {recentCities.map((city,i)=>(
+                    <div key={i} style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
+                      <button onClick={()=>{ setInput(city.label||city.name); runModels(city.lat,city.lon,city.name); }} className="city-pill"
+                        style={{background:"rgba(56,189,248,.08)",border:"1px solid rgba(56,189,248,.25)",borderRadius:30,padding:"6px 15px 6px 12px",color:"#e0f2fe",fontSize:13,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",transition:"all .15s",fontWeight:500,display:"flex",alignItems:"center",gap:5}}>
+                        <span style={{fontSize:10,opacity:.6}}>📍</span>{city.name}
+                      </button>
+                      <button onClick={()=>{
+                        setRecentCities(prev=>{ const u=prev.filter((_,j)=>j!==i); try{localStorage.setItem('mv_recent',JSON.stringify(u));}catch{} return u; });
+                      }} style={{position:"absolute",top:-4,right:-4,background:"#0f2035",border:"1px solid rgba(56,189,248,.2)",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:"#475569",fontSize:9,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div style={{marginBottom:20}}>
+                <div style={{color:"#1e3a5f",fontSize:10,textTransform:"uppercase",letterSpacing:".1em",fontFamily:"'DM Mono',monospace",marginBottom:10,textAlign:"center"}}>Ciudades populares</div>
+                <div style={{display:"flex",gap:6,justifyContent:"center",flexWrap:"wrap"}}>
+                  {CITIES.map(city=>(
+                    <button key={city} onClick={()=>quickCity(city)} className="city-pill"
+                      style={{background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.3)",borderRadius:30,padding:"6px 15px",color:"#e0f2fe",fontSize:13,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",transition:"all .15s",fontWeight:500}}>
+                      {city}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div style={{textAlign:"center"}}><p style={{color:"#94a3b8",fontSize:12,lineHeight:1.9}}>Sin registro · Sin API key · Datos científicos reales</p></div>
             <WorldMap onCitySelect={(lat, lon, name, label) => {
               setInput(label);
