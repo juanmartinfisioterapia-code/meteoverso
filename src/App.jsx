@@ -503,7 +503,7 @@ function PrimaryCurrentCard({ data, loading }) {
           {e:"👁️",l:"Visib.",v:data.vis!=null?`${data.vis}km`:"—"},
         ].map(({e,l,v})=>(
           <div key={l} style={{background:"rgba(255,255,255,.03)",borderRadius:10,padding:"8px 10px"}}>
-            <div style={{color:"#7dd3fc",fontSize:11,textTransform:"uppercase",letterSpacing:".05em",marginBottom:2}}>{e} {l}</div>
+            <div style={{color:"#93c5fd",fontSize:11,textTransform:"uppercase",letterSpacing:".06em",marginBottom:3,fontWeight:600}}>{e} {l}</div>
             <div style={{color:"#ffffff",fontSize:15,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{v}</div>
           </div>
         ))}
