@@ -545,9 +545,6 @@ export default function App() {
   const [recentCities, setRecentCities] = useState(() => {
     try { return JSON.parse(localStorage.getItem('mv_recent') || '[]'); } catch { return []; }
   });
-  const [recentCities, setRecentCities] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('mv_recent') || '[]'); } catch { return []; }
-  });
   const [vNow,       setVNow]       = useState("");
   const [v24h,       setV24h]       = useState("");
   const [v7d,        setV7d]        = useState("");
