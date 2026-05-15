@@ -49,7 +49,7 @@ async function fetchAEMET(lat, lon) {
   const key = import.meta.env.VITE_AEMET_KEY;
   if (!key) throw new Error("Sin API key de AEMET");
 
-  // Step 1: Get list of municipalities to find closest
+  // Step 1: municipalities
   const muniRes = await fetch(
     `https://opendata.aemet.es/opendata/api/maestro/municipios?api_key=${key}`,
     { headers: { "Accept": "application/json" } }
@@ -58,7 +58,7 @@ async function fetchAEMET(lat, lon) {
   const towns = await muniRes.json();
   if (!Array.isArray(towns)) throw new Error("Sin municipios");
 
-  // Find closest municipality
+  // Find closest
   let best = null, bestD = Infinity;
   for (const t of towns) {
     const tLat = parseFloat(t.latitud_dec ?? t.latitud ?? 0);
@@ -69,7 +69,7 @@ async function fetchAEMET(lat, lon) {
   if (!best) throw new Error("Sin municipio cercano");
   const code = best.id.replace("id", "");
 
-  // Step 2: Get hourly forecast
+  // Step 2: hourly forecast
   const predRes = await fetch(
     `https://opendata.aemet.es/opendata/api/prediccion/especifica/municipio/horaria/${code}?api_key=${key}`,
     { headers: { "Accept": "application/json" } }
@@ -80,116 +80,136 @@ async function fetchAEMET(lat, lon) {
 
   const now = new Date();
   const days = raw[0]?.prediccion?.dia ?? [];
-  let cDay = null, cH = null, cDiff = Infinity;
-  for (const day of days) {
-    for (const h of (day.temperatura ?? [])) {
-      const p = String(h.periodo).padStart(2, "0");
-      const t = new Date(`${day.fecha}T${p}:00:00`);
-      const diff = Math.abs(t - now);
-      if (diff < cDiff) { cDiff = diff; cDay = day; cH = parseInt(h.periodo); }
-    }
-  }
-  if (!cDay) throw new Error("Sin datos horarios AEMET");
-
-  const gh = (arr, h) => arr?.find(x => parseInt(x.periodo) === h)?.value ?? null;
-  const gr = (arr, h) => {
-    if (!arr) return null;
-    const v = arr.find(x => {
-      if (String(x.periodo).includes("-")) {
-        const [a, b] = x.periodo.split("-").map(Number);
-        return h >= a && h <= b;
-      }
-      return parseInt(x.periodo) === h;
-    });
-    return v?.value ?? null;
-  };
+  if (!days.length) throw new Error("Sin días AEMET");
 
   const AEMET_SKY = {
     "11":{icon:"☀️",label:"Despejado"},"12":{icon:"🌤️",label:"Poco nublado"},
     "13":{icon:"⛅",label:"Intervalos nubosos"},"14":{icon:"☁️",label:"Nublado"},
     "15":{icon:"☁️",label:"Muy nublado"},"16":{icon:"☁️",label:"Cubierto"},
     "23":{icon:"🌦️",label:"Intervalos+lluvia"},"24":{icon:"🌧️",label:"Nublado+lluvia"},
-    "26":{icon:"🌧️",label:"Cubierto+lluvia"},"36":{icon:"❄️",label:"Cubierto+nieve"},
-    "43":{icon:"🌦️",label:"Chubascos"},"46":{icon:"🌧️",label:"Cubierto+chubascos"},
-    "51":{icon:"⛈️",label:"Tormenta"},"54":{icon:"⛈️",label:"Cubierto+tormenta"},
-    "61":{icon:"🌫️",label:"Niebla"},"62":{icon:"🌫️",label:"Bruma"},
+    "26":{icon:"🌧️",label:"Cubierto+lluvia"},"33":{icon:"🌦️",label:"Intervalos+nieve"},
+    "36":{icon:"❄️",label:"Cubierto+nieve"},"43":{icon:"🌦️",label:"Chubascos"},
+    "46":{icon:"🌧️",label:"Cubierto+chubascos"},"51":{icon:"⛈️",label:"Tormenta"},
+    "54":{icon:"⛈️",label:"Cubierto+tormenta"},"61":{icon:"🌫️",label:"Niebla"},
+    "62":{icon:"🌫️",label:"Bruma"},
   };
 
-  const windArr = cDay.vientoAndRachaMax?.map(v => ({ periodo: v.periodo, value: v.velocidad?.[0]?.value }));
-  const skyCode = gr(cDay.estadoCielo, cH);
-  const skyInfo = AEMET_SKY[String(skyCode).replace(/^0+/, "")] ?? { icon:"🌡️", label:"Variable" };
+  const getSky = code => {
+    if (code == null) return {icon:"🌡️",label:"Variable"};
+    return AEMET_SKY[String(code).replace(/^0+/,"").trim()] ?? {icon:"🌡️",label:"Variable"};
+  };
 
-  // Build hourly data from AEMET
+  // Get value by exact hour period
+  const byHour = (arr, h) => {
+    if (!arr) return null;
+    const v = arr.find(x => parseInt(x.periodo) === h);
+    return v?.value ?? null;
+  };
+
+  // Get value by range period (e.g. "00-06")
+  const byRange = (arr, h) => {
+    if (!arr) return null;
+    const v = arr.find(x => {
+      const p = String(x.periodo);
+      if (p.includes("-")) {
+        const [a,b] = p.split("-").map(Number);
+        return h >= a && h < b;
+      }
+      return parseInt(p) === h;
+    });
+    return v?.value ?? null;
+  };
+
+  // Build hourly
   const hourly = [];
   for (const day of days) {
     for (const h of (day.temperatura ?? [])) {
       const hp = parseInt(h.periodo);
       const t = new Date(`${day.fecha}T${String(hp).padStart(2,"0")}:00:00`);
-      if (t >= now && hourly.length < 24) {
-        const precipP = gr(day.precipitacion, hp);
-        const precipProb = gr(day.probPrecipitacion, hp) ?? gr(day.precipitacion, hp);
-        const skyRaw = gr(day.estadoCielo, hp);
-        const skyKey = skyRaw != null ? String(skyRaw).replace(/^0+/, "") : "";
-        const skyInfo = AEMET_SKY[skyKey] ?? {icon:"🌡️", label:"Variable"};
-        const tempVal = Number(h.value);
-        if (isNaN(tempVal)) continue;
-        hourly.push({
-          time: t,
-          temp: Math.round(tempVal),
-          feels: Math.round(Number(gh(day.sensTermica, hp) ?? tempVal)),
-          precip: precipP != null ? +Number(precipP).toFixed(1) : 0,
-          precipProb: precipProb != null ? Math.round(Number(precipProb)) : 0,
-          wind: Math.round(Number(gh(windArr, hp) ?? 0)),
-          windD: 0,
-          humidity: Math.round(Number(gh(day.humedadRelativa, hp) ?? 60)),
-          info: skyInfo,
-        });
-      }
+      if (t < now || hourly.length >= 24) continue;
+      const tempVal = Number(h.value);
+      if (isNaN(tempVal)) continue;
+
+      const windEntry = (day.vientoAndRachaMax ?? []).find(v => {
+        const p = String(v.periodo);
+        if (p.includes("-")) { const [a,b]=p.split("-").map(Number); return hp>=a&&hp<b; }
+        return parseInt(p)===hp;
+      });
+      const windVal = windEntry?.velocidad?.[0]?.value ?? 0;
+      const skyVal = byRange(day.estadoCielo, hp) ?? byHour(day.estadoCielo, hp);
+      const precipProb = byRange(day.probPrecipitacion, hp) ?? byRange(day.precipitacion, hp) ?? 0;
+
+      hourly.push({
+        time: t,
+        temp: Math.round(tempVal),
+        feels: Math.round(Number(byHour(day.sensTermica, hp) ?? tempVal)),
+        precip: +(Number(byRange(day.precipitacion, hp) ?? 0)).toFixed(1),
+        precipProb: Math.round(Number(precipProb)),
+        wind: Math.round(Number(windVal)),
+        windD: 0,
+        humidity: Math.round(Number(byHour(day.humedadRelativa, hp) ?? 60)),
+        info: getSky(skyVal),
+      });
     }
   }
 
-  // Build daily data
+  // Build daily
   const daily = [];
   for (const day of days) {
     const temps = (day.temperatura ?? []).map(t => Number(t.value)).filter(v => !isNaN(v));
-    const maxT = temps.length ? Math.max(...temps) : 0;
-    const minT = temps.length ? Math.min(...temps) : 0;
-    const daySkyRaw = gr(day.estadoCielo, 12);
-    const daySkyKey = daySkyRaw != null ? String(daySkyRaw).replace(/^0+/, "") : "";
-    const daySkyInfo = AEMET_SKY[daySkyKey] ?? {icon:"🌡️", label:"Variable"};
-    const precipProb = gr(day.probPrecipitacion, 12) ?? gr(day.precipitacion, 12);
+    if (!temps.length) continue;
+    const windEntry12 = (day.vientoAndRachaMax ?? []).find(v => {
+      const p = String(v.periodo);
+      if (p.includes("-")) { const [a,b]=p.split("-").map(Number); return 12>=a&&12<b; }
+      return parseInt(p)===12;
+    });
+    const sky12 = byRange(day.estadoCielo, 12) ?? byHour(day.estadoCielo, 12);
+    const precipProb12 = byRange(day.probPrecipitacion, 12) ?? byRange(day.precipitacion, 12) ?? 0;
     daily.push({
       date: new Date(day.fecha + "T12:00:00"),
-      tempMax: Math.round(maxT),
-      tempMin: Math.round(minT),
+      tempMax: Math.round(Math.max(...temps)),
+      tempMin: Math.round(Math.min(...temps)),
       precip: 0,
-      precipProb: Math.round(Number(precipProb ?? 0)),
-      wind: Math.round(Number(gh(windArr, 12) ?? 0)),
+      precipProb: Math.round(Number(precipProb12)),
+      wind: Math.round(Number(windEntry12?.velocidad?.[0]?.value ?? 0)),
       windD: 0,
       uv: null,
       sunrise: day.ortoSol ?? null,
       sunset: day.ocasoSol ?? null,
-      info: daySkyInfo,
+      info: getSky(sky12),
     });
   }
 
-  const temp     = gh(cDay.temperatura, cH);
-  const feels    = gh(cDay.sensTermica, cH);
-  const humidity = gh(cDay.humedadRelativa, cH);
-  const wind     = gh(windArr, cH);
-  const precip   = gr(cDay.precipitacion, cH);
+  // Current hour data
+  let cDay = null, cH = null, cDiff = Infinity;
+  for (const day of days) {
+    for (const h of (day.temperatura ?? [])) {
+      const p = String(h.periodo).padStart(2,"0");
+      const t = new Date(`${day.fecha}T${p}:00:00`);
+      const diff = Math.abs(t - now);
+      if (diff < cDiff) { cDiff = diff; cDay = day; cH = parseInt(h.periodo); }
+    }
+  }
+  if (!cDay) throw new Error("Sin hora actual AEMET");
+
+  const windNow = (cDay.vientoAndRachaMax ?? []).find(v => {
+    const p = String(v.periodo);
+    if (p.includes("-")) { const [a,b]=p.split("-").map(Number); return cH>=a&&cH<b; }
+    return parseInt(p)===cH;
+  });
+  const skyNow = byRange(cDay.estadoCielo, cH) ?? byHour(cDay.estadoCielo, cH);
 
   return {
-    temp:     temp     != null ? Math.round(Number(temp))     : null,
-    feels:    feels    != null ? Math.round(Number(feels))    : null,
-    humidity: humidity != null ? Math.round(Number(humidity)) : null,
-    wind:     wind     != null ? Math.round(Number(wind))     : null,
+    temp:     Math.round(Number(byHour(cDay.temperatura, cH) ?? 0)),
+    feels:    Math.round(Number(byHour(cDay.sensTermica, cH) ?? 0)),
+    humidity: Math.round(Number(byHour(cDay.humedadRelativa, cH) ?? 60)),
+    wind:     Math.round(Number(windNow?.velocidad?.[0]?.value ?? 0)),
     windD:    0,
-    precip:   precip   != null ? +Number(precip).toFixed(1)   : 0,
+    precip:   +(Number(byRange(cDay.precipitacion, cH) ?? 0)).toFixed(1),
     pressure: null,
     vis:      null,
     uv:       null,
-    info:     skyInfo,
+    info:     getSky(skyNow),
     hourly,
     daily,
     town:     best.nombre,
