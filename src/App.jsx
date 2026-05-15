@@ -21,7 +21,24 @@ const WMO = {
   95:{icon:"⛈️",label:"Tormenta",color:"#818CF8"},
   99:{icon:"⛈️",label:"Tormenta+granizo",color:"#6366F1"},
 };
-const wmo = c => WMO[c] ?? WMO[Math.floor((c||0)/10)*10] ?? {icon:"🌡️",label:"Variable",color:"#94A3B8"};
+const isNight = (date) => {
+  const h = (date || new Date()).getHours();
+  return h >= 21 || h < 7;
+};
+
+const WMO_NIGHT = {
+  0:{icon:"🌙",label:"Despejado"},
+  1:{icon:"🌙",label:"Casi despejado"},
+  2:{icon:"☁️",label:"Parc. nublado"},
+  3:{icon:"☁️",label:"Nublado"},
+};
+
+const wmo = (c, date) => {
+  const night = isNight(date);
+  if (night && WMO_NIGHT[c]) return {...WMO_NIGHT[c], color: WMO[c]?.color ?? "#94A3B8"};
+  if (night && WMO_NIGHT[Math.floor((c||0)/10)*10]) return {...WMO_NIGHT[Math.floor((c||0)/10)*10], color: "#94A3B8"};
+  return WMO[c] ?? WMO[Math.floor((c||0)/10)*10] ?? {icon:"🌡️",label:"Variable",color:"#94A3B8"};
+};
 const windDir = d => ["N","NE","E","SE","S","SO","O","NO"][Math.round((d||0)/45)%8];
 const DAYS_ES = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
 const MONTHS_ES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
@@ -77,7 +94,7 @@ async function fetchWeatherDirect(lat, lon, param) {
           wind: Math.round(d.hourly.wind_speed_10m[i]),
           windD: d.hourly.wind_direction_10m[i],
           humidity: d.hourly.relative_humidity_2m[i],
-          info: wmo(d.hourly.weather_code[i]),
+          info: wmo(d.hourly.weather_code[i], new Date(d.hourly.time[i])),
         });
       }
     }
@@ -106,7 +123,7 @@ async function fetchWeatherDirect(lat, lon, param) {
     windD: Math.round(c.wind_direction_10m ?? 0), precip: +c.precipitation.toFixed(1),
     pressure: Math.round(c.surface_pressure),
     vis: c.visibility != null ? +(c.visibility/1000).toFixed(1) : null,
-    uv: c.uv_index, info: wmo(c.weather_code), hourly, daily,
+    uv: c.uv_index, info: wmo(c.weather_code, new Date()), hourly, daily,
   };
 
 }
@@ -138,7 +155,7 @@ async function fetchWeather(lat, lon, param) {
           wind: Math.round(d.hourly.wind_speed_10m[i]),
           windD: d.hourly.wind_direction_10m[i],
           humidity: d.hourly.relative_humidity_2m[i],
-          info: wmo(d.hourly.weather_code[i]),
+          info: wmo(d.hourly.weather_code[i], new Date(d.hourly.time[i])),
         });
       }
     }
@@ -167,7 +184,7 @@ async function fetchWeather(lat, lon, param) {
     windD: Math.round(c.wind_direction_10m ?? 0), precip: +c.precipitation.toFixed(1),
     pressure: Math.round(c.surface_pressure),
     vis: c.visibility != null ? +(c.visibility/1000).toFixed(1) : null,
-    uv: c.uv_index, info: wmo(c.weather_code), hourly, daily,
+    uv: c.uv_index, info: wmo(c.weather_code, new Date()), hourly, daily,
   };
 }
 
