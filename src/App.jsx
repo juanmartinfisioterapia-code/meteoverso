@@ -30,9 +30,9 @@ const fmtTime = s => s ? s.slice(11,16) : "—";
 
 const MODELS = [
   {id:"best",  name:"Meteoverso",   badge:"RECOMENDADO", color:"#60A5FA", bg:"rgba(96,165,250,.08)",  br:"rgba(96,165,250,.28)",  tag:"🇪🇸 Mejor para España", param:"best_match",   primary:true},
-  {id:"ecmwf", name:"El Tiempo.es", badge:"ECMWF",       color:"#38BDF8", bg:"rgba(56,189,248,.07)",  br:"rgba(56,189,248,.25)",  tag:"🇪🇺 Modelo Europeo",   param:"ecmwf_ifs025", primary:false},
-  {id:"icon",  name:"Windy.com",    badge:"ICON-EU",      color:"#93C5FD", bg:"rgba(147,197,253,.07)", br:"rgba(147,197,253,.22)", tag:"🇩🇪 Modelo Alemán",    param:"icon_seamless", primary:false},
-  {id:"aemet", name:"AEMET",        badge:"OFICIAL ES",   color:"#F97316", bg:"rgba(249,115,22,.07)",  br:"rgba(249,115,22,.25)",  tag:"🇪🇸 Datos oficiales",  param:"aemet",         primary:false},
+  {id:"aemet", name:"AEMET",        badge:"OFICIAL ES",   color:"#F97316", bg:"rgba(249,115,22,.07)",  br:"rgba(249,115,22,.3)",   tag:"🇪🇸 Datos oficiales",  param:"aemet",         primary:false},
+  {id:"ecmwf", name:"El Tiempo.es", badge:"ECMWF",       color:"#38BDF8", bg:"rgba(56,189,248,.07)",  br:"rgba(56,189,248,.3)",   tag:"🇪🇺 Modelo Europeo",   param:"ecmwf_ifs025", primary:false},
+  {id:"icon",  name:"Windy.com",    badge:"ICON-EU",      color:"#93C5FD", bg:"rgba(147,197,253,.07)", br:"rgba(147,197,253,.3)",  tag:"🇩🇪 Modelo Alemán",    param:"icon_seamless", primary:false},
 ];
 
 const SECONDARY = MODELS.filter(m => !m.primary);
@@ -466,9 +466,9 @@ function VeredictoBox({ text, loading, type }) {
 function CompareButton({ model, expanded, onClick }) {
   return (
     <button onClick={onClick}
-      style={{display:"inline-flex",alignItems:"center",gap:6,background:expanded?`${model.color}18`:"rgba(255,255,255,.04)",border:`1px solid ${expanded?model.color:"rgba(255,255,255,.1)"}`,borderRadius:20,padding:"6px 14px",cursor:"pointer",transition:"all .2s",fontFamily:"'DM Sans',sans-serif"}}>
-      <span style={{color:expanded?model.color:"#475569",fontSize:12,fontWeight:600}}>{model.name}</span>
-      <span style={{color:expanded?model.color:"#334155",fontSize:10}}>{expanded?"▲":"▼"}</span>
+      style={{display:"inline-flex",alignItems:"center",gap:6,background:expanded?`${model.color}22`:"rgba(255,255,255,.06)",border:`1.5px solid ${expanded?model.color:"rgba(255,255,255,.25)"}`,borderRadius:20,padding:"7px 16px",cursor:"pointer",transition:"all .2s",fontFamily:"'DM Sans',sans-serif"}}>
+      <span style={{color:expanded?model.color:"#e0f2fe",fontSize:13,fontWeight:600}}>{model.name}</span>
+      <span style={{color:expanded?model.color:"#94a3b8",fontSize:10}}>{expanded?"▲":"▼"}</span>
     </button>
   );
 }
