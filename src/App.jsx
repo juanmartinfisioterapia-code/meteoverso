@@ -49,170 +49,105 @@ async function fetchAEMET(lat, lon) {
   const key = import.meta.env.VITE_AEMET_KEY;
   if (!key) throw new Error("Sin API key de AEMET");
 
-  // Step 1: municipalities
-  const muniRes = await fetch(
-    `https://opendata.aemet.es/opendata/api/maestro/municipios?api_key=${key}`,
-    { headers: { "Accept": "application/json" } }
-  );
-  if (!muniRes.ok) throw new Error("AEMET key inválida");
-  const towns = await muniRes.json();
-  if (!Array.isArray(towns)) throw new Error("Sin municipios");
+  // Use Claude as proxy to bypass CORS restrictions
+  const prompt = `Fetch AEMET weather data for coordinates lat=${lat}, lon=${lon}.
 
-  // Find closest
-  let best = null, bestD = Infinity;
-  for (const t of towns) {
-    const tLat = parseFloat(t.latitud_dec ?? t.latitud ?? 0);
-    const tLon = parseFloat(t.longitud_dec ?? t.longitud ?? 0);
-    const d = Math.hypot(tLat - lat, tLon - lon);
-    if (d < bestD) { bestD = d; best = t; }
-  }
-  if (!best) throw new Error("Sin municipio cercano");
-  const code = best.id.replace("id", "");
+Steps:
+1. Call: https://opendata.aemet.es/opendata/api/maestro/municipios?api_key=${key}
+2. Find the closest municipality to lat=${lat}, lon=${lon}
+3. Call: https://opendata.aemet.es/opendata/api/prediccion/especifica/municipio/horaria/MUNICIPIO_CODE?api_key=${key}
+4. Fetch the datos URL from the response
+5. Parse the hourly forecast
 
-  // Step 2: hourly forecast
-  const predRes = await fetch(
-    `https://opendata.aemet.es/opendata/api/prediccion/especifica/municipio/horaria/${code}?api_key=${key}`,
-    { headers: { "Accept": "application/json" } }
-  );
-  const meta = await predRes.json();
-  if (!meta.datos) throw new Error("Sin datos AEMET");
-  const raw = await (await fetch(meta.datos)).json();
+Return ONLY this JSON, no explanation:
+{
+  "town": "city name",
+  "temp": 15,
+  "feels": 13,
+  "humidity": 70,
+  "wind": 10,
+  "precip": 0.0,
+  "skyCode": "13",
+  "hourly": [{"hour": "09:00", "temp": 14, "precipProb": 20, "precip": 0.0, "wind": 10, "humidity": 65, "skyCode": "13"}],
+  "daily": [{"date": "2024-01-01", "tempMax": 18, "tempMin": 8, "precipProb": 30, "wind": 12, "skyCode": "13"}]
+}`;
 
-  const now = new Date();
-  const days = raw[0]?.prediccion?.dia ?? [];
-  if (!days.length) throw new Error("Sin días AEMET");
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true"
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 2000,
+      tools: [{ type: "web_search_20250305", name: "web_search" }],
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+
+  if (!res.ok) throw new Error("Claude proxy error " + res.status);
+  const d = await res.json();
+  const text = (d.content || []).filter(b => b.type === "text").map(b => b.text).join("");
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error("Sin datos AEMET");
+  const data = JSON.parse(jsonMatch[0]);
 
   const AEMET_SKY = {
     "11":{icon:"☀️",label:"Despejado"},"12":{icon:"🌤️",label:"Poco nublado"},
     "13":{icon:"⛅",label:"Intervalos nubosos"},"14":{icon:"☁️",label:"Nublado"},
     "15":{icon:"☁️",label:"Muy nublado"},"16":{icon:"☁️",label:"Cubierto"},
     "23":{icon:"🌦️",label:"Intervalos+lluvia"},"24":{icon:"🌧️",label:"Nublado+lluvia"},
-    "26":{icon:"🌧️",label:"Cubierto+lluvia"},"33":{icon:"🌦️",label:"Intervalos+nieve"},
-    "36":{icon:"❄️",label:"Cubierto+nieve"},"43":{icon:"🌦️",label:"Chubascos"},
-    "46":{icon:"🌧️",label:"Cubierto+chubascos"},"51":{icon:"⛈️",label:"Tormenta"},
-    "54":{icon:"⛈️",label:"Cubierto+tormenta"},"61":{icon:"🌫️",label:"Niebla"},
-    "62":{icon:"🌫️",label:"Bruma"},
+    "26":{icon:"🌧️",label:"Cubierto+lluvia"},"36":{icon:"❄️",label:"Cubierto+nieve"},
+    "43":{icon:"🌦️",label:"Chubascos"},"46":{icon:"🌧️",label:"Cubierto+chubascos"},
+    "51":{icon:"⛈️",label:"Tormenta"},"54":{icon:"⛈️",label:"Cubierto+tormenta"},
+    "61":{icon:"🌫️",label:"Niebla"},"62":{icon:"🌫️",label:"Bruma"},
   };
+  const getSky = c => AEMET_SKY[String(c).replace(/^0+/,"").trim()] ?? {icon:"🌡️",label:"Variable"};
+  const now = new Date();
 
-  const getSky = code => {
-    if (code == null) return {icon:"🌡️",label:"Variable"};
-    return AEMET_SKY[String(code).replace(/^0+/,"").trim()] ?? {icon:"🌡️",label:"Variable"};
-  };
+  const hourly = (data.hourly || []).map(h => ({
+    time: new Date(`${new Date().toISOString().slice(0,10)}T${h.hour}:00`),
+    temp: Math.round(Number(h.temp)),
+    feels: Math.round(Number(h.temp) - 2),
+    precip: +Number(h.precip || 0).toFixed(1),
+    precipProb: Math.round(Number(h.precipProb || 0)),
+    wind: Math.round(Number(h.wind || 0)),
+    windD: 0,
+    humidity: Math.round(Number(h.humidity || 60)),
+    info: getSky(h.skyCode || "13"),
+  })).filter(h => h.time >= now).slice(0, 24);
 
-  // Get value by exact hour period
-  const byHour = (arr, h) => {
-    if (!arr) return null;
-    const v = arr.find(x => parseInt(x.periodo) === h);
-    return v?.value ?? null;
-  };
-
-  // Get value by range period (e.g. "00-06")
-  const byRange = (arr, h) => {
-    if (!arr) return null;
-    const v = arr.find(x => {
-      const p = String(x.periodo);
-      if (p.includes("-")) {
-        const [a,b] = p.split("-").map(Number);
-        return h >= a && h < b;
-      }
-      return parseInt(p) === h;
-    });
-    return v?.value ?? null;
-  };
-
-  // Build hourly
-  const hourly = [];
-  for (const day of days) {
-    for (const h of (day.temperatura ?? [])) {
-      const hp = parseInt(h.periodo);
-      const t = new Date(`${day.fecha}T${String(hp).padStart(2,"0")}:00:00`);
-      if (t < now || hourly.length >= 24) continue;
-      const tempVal = Number(h.value);
-      if (isNaN(tempVal)) continue;
-
-      const windEntry = (day.vientoAndRachaMax ?? []).find(v => {
-        const p = String(v.periodo);
-        if (p.includes("-")) { const [a,b]=p.split("-").map(Number); return hp>=a&&hp<b; }
-        return parseInt(p)===hp;
-      });
-      const windVal = windEntry?.velocidad?.[0]?.value ?? 0;
-      const skyVal = byRange(day.estadoCielo, hp) ?? byHour(day.estadoCielo, hp);
-      const precipProb = byRange(day.probPrecipitacion, hp) ?? byRange(day.precipitacion, hp) ?? 0;
-
-      hourly.push({
-        time: t,
-        temp: Math.round(tempVal),
-        feels: Math.round(Number(byHour(day.sensTermica, hp) ?? tempVal)),
-        precip: +(Number(byRange(day.precipitacion, hp) ?? 0)).toFixed(1),
-        precipProb: Math.round(Number(precipProb)),
-        wind: Math.round(Number(windVal)),
-        windD: 0,
-        humidity: Math.round(Number(byHour(day.humedadRelativa, hp) ?? 60)),
-        info: getSky(skyVal),
-      });
-    }
-  }
-
-  // Build daily
-  const daily = [];
-  for (const day of days) {
-    const temps = (day.temperatura ?? []).map(t => Number(t.value)).filter(v => !isNaN(v));
-    if (!temps.length) continue;
-    const windEntry12 = (day.vientoAndRachaMax ?? []).find(v => {
-      const p = String(v.periodo);
-      if (p.includes("-")) { const [a,b]=p.split("-").map(Number); return 12>=a&&12<b; }
-      return parseInt(p)===12;
-    });
-    const sky12 = byRange(day.estadoCielo, 12) ?? byHour(day.estadoCielo, 12);
-    const precipProb12 = byRange(day.probPrecipitacion, 12) ?? byRange(day.precipitacion, 12) ?? 0;
-    daily.push({
-      date: new Date(day.fecha + "T12:00:00"),
-      tempMax: Math.round(Math.max(...temps)),
-      tempMin: Math.round(Math.min(...temps)),
-      precip: 0,
-      precipProb: Math.round(Number(precipProb12)),
-      wind: Math.round(Number(windEntry12?.velocidad?.[0]?.value ?? 0)),
-      windD: 0,
-      uv: null,
-      sunrise: day.ortoSol ?? null,
-      sunset: day.ocasoSol ?? null,
-      info: getSky(sky12),
-    });
-  }
-
-  // Current hour data
-  let cDay = null, cH = null, cDiff = Infinity;
-  for (const day of days) {
-    for (const h of (day.temperatura ?? [])) {
-      const p = String(h.periodo).padStart(2,"0");
-      const t = new Date(`${day.fecha}T${p}:00:00`);
-      const diff = Math.abs(t - now);
-      if (diff < cDiff) { cDiff = diff; cDay = day; cH = parseInt(h.periodo); }
-    }
-  }
-  if (!cDay) throw new Error("Sin hora actual AEMET");
-
-  const windNow = (cDay.vientoAndRachaMax ?? []).find(v => {
-    const p = String(v.periodo);
-    if (p.includes("-")) { const [a,b]=p.split("-").map(Number); return cH>=a&&cH<b; }
-    return parseInt(p)===cH;
-  });
-  const skyNow = byRange(cDay.estadoCielo, cH) ?? byHour(cDay.estadoCielo, cH);
+  const daily = (data.daily || []).map(d => ({
+    date: new Date(d.date + "T12:00:00"),
+    tempMax: Math.round(Number(d.tempMax)),
+    tempMin: Math.round(Number(d.tempMin)),
+    precip: 0,
+    precipProb: Math.round(Number(d.precipProb || 0)),
+    wind: Math.round(Number(d.wind || 0)),
+    windD: 0,
+    uv: null,
+    sunrise: null,
+    sunset: null,
+    info: getSky(d.skyCode || "13"),
+  }));
 
   return {
-    temp:     Math.round(Number(byHour(cDay.temperatura, cH) ?? 0)),
-    feels:    Math.round(Number(byHour(cDay.sensTermica, cH) ?? 0)),
-    humidity: Math.round(Number(byHour(cDay.humedadRelativa, cH) ?? 60)),
-    wind:     Math.round(Number(windNow?.velocidad?.[0]?.value ?? 0)),
-    windD:    0,
-    precip:   +(Number(byRange(cDay.precipitacion, cH) ?? 0)).toFixed(1),
+    temp: Math.round(Number(data.temp)),
+    feels: Math.round(Number(data.feels ?? data.temp)),
+    humidity: Math.round(Number(data.humidity ?? 60)),
+    wind: Math.round(Number(data.wind ?? 0)),
+    windD: 0,
+    precip: +Number(data.precip ?? 0).toFixed(1),
     pressure: null,
-    vis:      null,
-    uv:       null,
-    info:     getSky(skyNow),
+    vis: null,
+    uv: null,
+    info: getSky(data.skyCode ?? "13"),
     hourly,
     daily,
-    town:     best.nombre,
+    town: data.town ?? "España",
   };
 }
 
@@ -384,14 +319,8 @@ function WorldMap({ onCitySelect }) {
         L.polyline([[-90, lng],[90, lng]], gridStyle).addTo(map);
       }
 
-      // Cloud layer from OpenWeatherMap (free, no key needed for tiles)
-      L.tileLayer('https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=demo', {
-        opacity: 0.5,
-        maxZoom: 19,
-      }).addTo(map);
-
-      // Rain layer
-      L.tileLayer('https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=demo', {
+      // Rain radar layer from RainViewer (free, no key needed)
+      L.tileLayer('https://tilecache.rainviewer.com/v2/radar/nowcast/256/{z}/{x}/{y}/2/1_1.png', {
         opacity: 0.4,
         maxZoom: 19,
       }).addTo(map);
