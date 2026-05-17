@@ -188,13 +188,6 @@ async function fetchWeather(lat, lon, param) {
   };
 }
 
-function hourConcordance(data, i) {
-  const temps = MODELS.map(m => data[m.id]?.hourly?.[i]?.temp).filter(v => v != null);
-  if (temps.length < 2) return {color:"#475569", pct:0};
-  const spread = Math.max(...temps) - Math.min(...temps);
-  const pct = spread===0?100:spread===1?85:spread===2?65:spread<=4?45:20;
-  return { pct, color: pct>=80?"#86EFAC":pct>=50?"#FCD34D":"#F87171" };
-}
 
 
 function hourConcordance(data, i) {
