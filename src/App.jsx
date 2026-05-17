@@ -201,36 +201,38 @@ function hourConcordance(data, i) {
 async function generateVeredicto(results, cityName, type) {
   const primary = results["best"];
   if (!primary || primary.error) return null;
-  const day = primary.daily?.[0];
-  const rainHours = primary.hourly?.filter(h => h.precip > 0.2).length ?? 0;
   const temps = MODELS.map(m => results[m.id]?.temp).filter(v => v != null);
   const spread = temps.length > 1 ? Math.max(...temps) - Math.min(...temps) : 0;
   const conf = spread===0?100:spread===1?85:spread===2?65:spread<=4?45:20;
-
   let context = "";
   if (type === "now") {
-    context = `Ahora mismo: ${primary.temp}°C, ${primary.info.label}, viento ${primary.wind}km/h, humedad ${primary.humidity}%. Sensación ${primary.feels}°C.`;
+    context = `Ahora: ${primary.temp}C ${primary.info.label}, viento ${primary.wind}km/h, humedad ${primary.humidity}%. Sensacion ${primary.feels}C.`;
   } else if (type === "24h") {
-    const rainH = primary.hourly?.filter(h=>h.precipProb>40).map(h=>fmtHour(h.time)).slice(0,3).join(", ") || "ninguna";
     const maxT = primary.hourly ? Math.max(...primary.hourly.map(h=>h.temp)) : primary.temp;
     const minT = primary.hourly ? Math.min(...primary.hourly.map(h=>h.temp)) : primary.temp;
-    context = `Próximas 24h: máx ${maxT}°C mín ${minT}°C. Horas con posible lluvia: ${rainH}. Viento máx ${Math.max(...(primary.hourly?.map(h=>h.wind)||[primary.wind]))}km/h.`;
-  } else if (type === "7d") {
-    const week = primary.daily?.slice(0,7).map((d,i) => `${i===0?"Hoy":i===1?"Mañana":DAYS_ES[d.date.getDay()]}: ${d.info.icon} ${d.tempMax}°/${d.tempMin}° lluvia ${d.precipProb}%`).join(". ");
-    context = `Próximos 7 días: ${week}`;
+    const rainH = primary.hourly?.filter(h=>h.precipProb>40).length ?? 0;
+    context = `24h: max ${maxT}C min ${minT}C. Horas con lluvia: ${rainH}.`;
+  } else {
+    const week = primary.daily?.slice(0,5).map((d,i)=>`${i===0?"Hoy":DAYS_ES[d.date.getDay()]}: ${d.tempMax}/${d.tempMin}C lluvia ${d.precipProb}%`).join(", ");
+    context = `Semana: ${week}`;
   }
-
   try {
-    const res = await fetch("/api/veredicto", {
+    const r = await fetch("/api/veredicto", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ cityName, type, context, conf }),
     });
-    const d = await res.json();
-    return d.content?.find(b => b.type === "text")?.text?.trim() ?? null;
-  } catch { return null; }
+    if (!r.ok) throw new Error("error");
+    const d = await r.json();
+    return d.veredicto ?? null;
+  } catch {
+    if (primary.temp > 30) return `Dia muy caluroso en ${cityName} con ${primary.temp}C. Hidratate bien.`;
+    if ((primary.daily?.[0]?.precipProb ?? 0) > 60) return `Alta probabilidad de lluvia en ${cityName}. Lleva paraguas.`;
+    if (primary.wind > 40) return `Viento fuerte en ${cityName} (${primary.wind}km/h). Ten precaucion.`;
+    if (primary.temp < 5) return `Frio intenso en ${cityName} con ${primary.temp}C. Abrigate bien.`;
+    return `Tiempo ${primary.info.label.toLowerCase()} en ${cityName} con ${primary.temp}C. ${conf>=80?"Los modelos coinciden.":"Consulta los modelos para mas detalle."}`;
+  }
 }
-
 
 // ─── Map Component ───────────────────────────────────────────────────────────
 function WorldMap({ onCitySelect }) {
@@ -981,5 +983,3 @@ export default function App() {
     </div>
   );
 }
-
-// v2
