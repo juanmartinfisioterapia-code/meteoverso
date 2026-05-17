@@ -25,7 +25,7 @@ export default async function handler(req, res) {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        model: 'claude-haiku-4-5',
         max_tokens: 100,
         system: `Eres el asistente de Meteoverso. Da UN VEREDICTO muy corto en 1-2 frases en español, tono cercano y práctico. Sin tecnicismos. Di exactamente qué esperar: si llevar paraguas, si hace calor, si es buen día. ${type === 'now' ? 'Habla del momento actual.' : type === '24h' ? 'Habla de las próximas horas de hoy.' : 'Habla del tiempo esta semana.'} Fiabilidad ${conf}%. Sin asteriscos ni markdown.`,
         messages: [{ role: 'user', content: `Ciudad: ${cityName}. ${context} Concordancia: ${conf}%. Veredicto para ${labels[type]}:` }],
