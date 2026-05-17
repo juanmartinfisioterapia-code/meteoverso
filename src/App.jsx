@@ -200,6 +200,55 @@ async function generateVeredicto(results, cityName, type) {
   const primary = results["best"];
   if (!primary || primary.error) return null;
   const day = primary.daily?.[0];
+  const temps = MODELS.map(m => results[m.id]?.temp).filter(v => v != null);
+  const spread = temps.length > 1 ? Math.max(...temps) - Math.min(...temps) : 0;
+  const conf = spread===0?100:spread===1?85:spread===2?65:spread<=4?45:20;
+
+  let context = "";
+  if (type === "now") {
+    context = `Ahora: ${primary.temp}°C ${primary.info.label}, viento ${primary.wind}km/h, humedad ${primary.humidity}%. Sensación ${primary.feels}°C.`;
+  } else if (type === "24h") {
+    const maxT = primary.hourly ? Math.max(...primary.hourly.map(h=>h.temp)) : primary.temp;
+    const minT = primary.hourly ? Math.min(...primary.hourly.map(h=>h.temp)) : primary.temp;
+    const rainH = primary.hourly?.filter(h=>h.precipProb>40).length ?? 0;
+    context = `24h: máx ${maxT}°C mín ${minT}°C. Horas con lluvia probable: ${rainH}.`;
+  } else {
+    const week = primary.daily?.slice(0,5).map((d,i)=>`${i===0?"Hoy":DAYS_ES[d.date.getDay()]}: ${d.tempMax}°/${d.tempMin}° lluvia ${d.precipProb}%`).join(", ");
+    context = `Semana: ${week}`;
+  }
+
+  try {
+    // Call our secure backend (API key never exposed to browser)
+    const r = await fetch("/api/veredicto", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cityName, type, context, conf }),
+    });
+    if (!r.ok) throw new Error("Backend error " + r.status);
+    const d = await r.json();
+    return d.veredicto ?? null;
+  } catch {
+    // Local fallback if backend fails
+    if (primary.temp > 30) return `Día muy caluroso en ${cityName} con ${primary.temp}°C. Hidrátate bien y evita el sol en las horas centrales.`;
+    if (primary.precipProb > 60 || (primary.daily?.[0]?.precipProb ?? 0) > 60) return `Alta probabilidad de lluvia en ${cityName}. Lleva paraguas.`;
+    if (primary.wind > 40) return `Viento fuerte en ${cityName} (${primary.wind}km/h). Ten precaución en exteriores.`;
+    if (primary.temp < 5) return `Frío intenso en ${cityName} con ${primary.temp}°C. Abrígate bien.`;
+    return `Tiempo ${primary.info.label.toLowerCase()} en ${cityName} con ${primary.temp}°C. ${conf >= 80 ? "Los modelos coinciden — pronóstico fiable." : "Consulta los modelos para más detalle."}`;
+  }
+}
+
+function hourConcordance(data, i) {
+  const temps = MODELS.map(m => data[m.id]?.hourly?.[i]?.temp).filter(v => v != null);
+  if (temps.length < 2) return {color:"#475569", pct:0};
+  const spread = Math.max(...temps) - Math.min(...temps);
+  const pct = spread===0?100:spread===1?85:spread===2?65:spread<=4?45:20;
+  return { pct, color: pct>=80?"#86EFAC":pct>=50?"#FCD34D":"#F87171" };
+}
+
+async function generateVeredicto(results, cityName, type) {
+  const primary = results["best"];
+  if (!primary || primary.error) return null;
+  const day = primary.daily?.[0];
   const rainHours = primary.hourly?.filter(h => h.precip > 0.2).length ?? 0;
   const temps = MODELS.map(m => results[m.id]?.temp).filter(v => v != null);
   const spread = temps.length > 1 ? Math.max(...temps) - Math.min(...temps) : 0;
