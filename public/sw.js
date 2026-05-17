@@ -1,27 +1,25 @@
-const CACHE = "meteoverso-v1";
-const ASSETS = ["/", "/index.html"];
+const CACHE = "meteoverso-v3";
 
 self.addEventListener("install", e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
   self.skipWaiting();
 });
 
 self.addEventListener("activate", e => {
-  e.waitUntil(caches.keys().then(keys =>
-    Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-  ));
+  e.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(keys.map(k => caches.delete(k)))
+    )
+  );
   self.clients.claim();
 });
 
+// Don't cache API calls - just pass through
 self.addEventListener("fetch", e => {
-  if (e.request.method !== "GET") return;
-  e.respondWith(
-    fetch(e.request)
-      .then(res => {
-        const clone = res.clone();
-        caches.open(CACHE).then(c => c.put(e.request, clone));
-        return res;
-      })
-      .catch(() => caches.match(e.request))
-  );
+  const url = e.request.url;
+  // Skip API calls entirely
+  if (url.includes('api.') || url.includes('opendata.') || url.includes('open-meteo') || url.includes('nominatim') || url.includes('tilecache')) {
+    return;
+  }
+  // For everything else, network first
+  e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
 });
