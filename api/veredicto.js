@@ -1,12 +1,3 @@
-import { createClient } from '@upstash/redis';
-
-const redis = createClient({
-  url: process.env.KV_REST_API_URL,
-  token: process.env.KV_REST_API_TOKEN,
-});
-
-const CACHE_TTL = 60 * 60 * 3; // 3 hours
-
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -20,23 +11,8 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing parameters' });
   }
 
-  // Cache key: city + type + hour block (changes every 3h)
-  const hourBlock = Math.floor(Date.now() / (1000 * 60 * 60 * 3));
-  const cacheKey = `veredicto:${cityName.toLowerCase().replace(/\s/g,'-')}:${type}:${hourBlock}`;
-
-  try {
-    // Check cache first
-    const cached = await redis.get(cacheKey);
-    if (cached) {
-      return res.status(200).json({ veredicto: cached, cached: true });
-    }
-  } catch (e) {
-    console.log('Cache read error:', e.message);
-  }
-
-  // Generate with Claude Haiku
   const key = process.env.ANTHROPIC_KEY;
-  if (!key) return res.status(500).json({ error: 'No Anthropic key' });
+  if (!key) return res.status(500).json({ error: 'No Anthropic key configured' });
 
   const labels = { now: 'ahora mismo', '24h': 'próximas horas de hoy', '7d': 'esta semana' };
 
@@ -59,16 +35,9 @@ export default async function handler(req, res) {
     const d = await r.json();
     const veredicto = d.content?.find(b => b.type === 'text')?.text?.trim();
 
-    if (!veredicto) throw new Error('No veredicto');
+    if (!veredicto) throw new Error('No veredicto from Claude');
 
-    // Save to cache
-    try {
-      await redis.set(cacheKey, veredicto, { ex: CACHE_TTL });
-    } catch (e) {
-      console.log('Cache write error:', e.message);
-    }
-
-    return res.status(200).json({ veredicto, cached: false });
+    return res.status(200).json({ veredicto });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
