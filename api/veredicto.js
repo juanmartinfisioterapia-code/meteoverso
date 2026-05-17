@@ -25,7 +25,7 @@ export default async function handler(req, res) {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 100,
         system: `Eres el asistente de Meteoverso. Da UN VEREDICTO muy corto en 1-2 frases en español, tono cercano y práctico. Sin tecnicismos. Di exactamente qué esperar: si llevar paraguas, si hace calor, si es buen día. ${type === 'now' ? 'Habla del momento actual.' : type === '24h' ? 'Habla de las próximas horas de hoy.' : 'Habla del tiempo esta semana.'} Fiabilidad ${conf}%. Sin asteriscos ni markdown.`,
         messages: [{ role: 'user', content: `Ciudad: ${cityName}. ${context} Concordancia: ${conf}%. Veredicto para ${labels[type]}:` }],
@@ -33,9 +33,10 @@ export default async function handler(req, res) {
     });
 
     const d = await r.json();
+    console.log('Claude response:', JSON.stringify(d).slice(0, 500));
     const veredicto = d.content?.find(b => b.type === 'text')?.text?.trim();
 
-    if (!veredicto) throw new Error('No veredicto from Claude');
+    if (!veredicto) throw new Error('Claude error: ' + JSON.stringify(d.error || d));
 
     return res.status(200).json({ veredicto });
   } catch (e) {
