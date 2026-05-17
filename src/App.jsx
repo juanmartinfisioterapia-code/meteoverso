@@ -221,20 +221,10 @@ async function generateVeredicto(results, cityName, type) {
   }
 
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch("/api/veredicto", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true"
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 100,
-        system: `Eres el asistente de Meteoverso. Da UN VEREDICTO muy corto en 1-2 frases en español, tono cercano y práctico. Sin tecnicismos. Di exactamente qué esperar: si llevar paraguas, si hace calor, si es buen día. ${type==="now"?"Habla del momento actual.":type==="24h"?"Habla de las próximas horas de hoy.":"Habla del tiempo esta semana."} Fiabilidad ${conf}%. Sin asteriscos ni markdown.`,
-        messages: [{ role: "user", content: `Ciudad: ${cityName}. ${context} Concordancia modelos: ${conf}%. Dame el veredicto.` }],
-      }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cityName, type, context, conf }),
     });
     const d = await res.json();
     return d.content?.find(b => b.type === "text")?.text?.trim() ?? null;
