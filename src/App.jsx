@@ -764,6 +764,19 @@ export default function App() {
               {/* Compare buttons */}
               {status==="done"&&primary&&!primary.error&&(
                 <div style={{marginTop:8}}>
+                  {/* Barra fiabilidad ahora mismo */}
+                  {con&&(
+                    <div style={{marginBottom:12}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
+                        <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>🎯 Fiabilidad del pronóstico</span>
+                        <span style={{color:con.cColor,fontSize:12,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{con.conf}% · {con.cLabel}</span>
+                      </div>
+                      <div style={{background:"rgba(255,255,255,.06)",borderRadius:6,height:7,overflow:"hidden"}}>
+                        <div style={{width:`${con.conf}%`,height:"100%",background:con.cColor,borderRadius:6,transition:"width 1.2s ease"}}/>
+                      </div>
+                      <div style={{color:"#1e3a5f",fontSize:10,marginTop:3}}>{con.spread}°C de dispersión entre modelos</div>
+                    </div>
+                  )}
                   <div style={{color:"#1e3a5f",fontSize:10,textTransform:"uppercase",letterSpacing:".1em",fontFamily:"'DM Mono',monospace",marginBottom:8}}>Comparar con</div>
                   <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                     {SECONDARY.map(m=>(
