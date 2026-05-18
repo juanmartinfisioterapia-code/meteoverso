@@ -471,8 +471,7 @@ export default function App() {
   const [status,     setStatus]     = useState("idle");
   const [errMsg,     setErrMsg]     = useState("");
   const [geoLoading,    setGeoLoading]    = useState(false);
-  const [fiabilidad,    setFiabilidad]    = useState(null);
-  const [fiabLoading,   setFiabLoading]   = useState(true);
+
   const [recentCities, setRecentCities] = useState(() => {
     try { return JSON.parse(localStorage.getItem('mv_recent') || '[]'); } catch { return []; }
   });
@@ -495,33 +494,7 @@ export default function App() {
 
   const skipDrop = useRef(false);
 
-  // Load Spain fiabilidad index on mount
-  useEffect(() => {
-    const loadFiabilidad = async () => {
-      try {
-        // Fetch 3 models for Madrid as reference point for Spain
-        const lat = 40.4168, lon = -3.7038;
-        const models = ["best_match", "ecmwf_ifs025", "icon_seamless"];
-        const temps = await Promise.all(models.map(async param => {
-          const r = await fetch(
-            `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&timezone=auto&models=${param}`
-          );
-          const d = await r.json();
-          return d.current?.temperature_2m ?? null;
-        }));
-        const valid = temps.filter(t => t != null);
-        if (valid.length < 2) return;
-        const spread = Math.max(...valid) - Math.min(...valid);
-        const conf = spread===0?100:spread===1?85:spread===2?65:spread<=4?45:20;
-        const color = conf>=80?"#86EFAC":conf>=50?"#FCD34D":"#F87171";
-        const label = conf>=80?"Alta":conf>=50?"Media":"Baja";
-        const emoji = conf>=80?"🟢":conf>=50?"🟡":"🔴";
-        setFiabilidad({ conf, color, label, emoji, spread });
-      } catch {}
-      setFiabLoading(false);
-    };
-    loadFiabilidad();
-  }, []);
+
 
   useEffect(() => {
     if (skipDrop.current) { skipDrop.current = false; return; }
@@ -729,32 +702,6 @@ export default function App() {
 
         {status==="error"&&errMsg&&(
           <div style={{background:"rgba(252,165,165,.07)",border:"1px solid rgba(252,165,165,.25)",borderRadius:10,padding:"11px 16px",color:"#FCA5A5",fontSize:13,marginBottom:14,animation:"fadeUp .3s ease both"}}>⚠️ {errMsg}</div>
-        )}
-
-        {/* FIABILIDAD ESPAÑA */}
-        {status==="idle"&&!showDrop&&(
-          <div style={{marginBottom:16,animation:"fadeUp .5s ease .1s both"}}>
-            <div style={{background:"rgba(255,255,255,.03)",border:`1px solid ${fiabilidad?.color ?? "rgba(56,189,248,.2)"}22`,borderRadius:14,padding:"14px 18px",textAlign:"center"}}>
-              {fiabLoading ? (
-                <div style={{color:"#1e3a5f",fontSize:12,fontFamily:"'DM Mono',monospace"}}>Calculando fiabilidad de España...</div>
-              ) : fiabilidad ? (
-                <>
-                  <div style={{color:"#94a3b8",fontSize:10,textTransform:"uppercase",letterSpacing:".12em",fontFamily:"'DM Mono',monospace",marginBottom:8}}>🎯 Índice de fiabilidad · España ahora</div>
-                  <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginBottom:10}}>
-                    <span style={{fontSize:22}}>{fiabilidad.emoji}</span>
-                    <span style={{fontFamily:"'Syne',sans-serif",fontSize:32,fontWeight:900,color:fiabilidad.color,lineHeight:1}}>{fiabilidad.conf}%</span>
-                    <span style={{color:fiabilidad.color,fontSize:14,fontWeight:600}}>{fiabilidad.label} fiabilidad</span>
-                  </div>
-                  <div style={{background:"rgba(255,255,255,.05)",borderRadius:8,height:6,overflow:"hidden",marginBottom:6}}>
-                    <div style={{width:`${fiabilidad.conf}%`,height:"100%",background:fiabilidad.color,borderRadius:8,transition:"width 1.5s ease"}}/>
-                  </div>
-                  <div style={{color:"#1e3a5f",fontSize:11}}>
-                    {fiabilidad.conf>=80?"Los modelos coinciden hoy — puedes fiarte del pronóstico":fiabilidad.conf>=50?"Hay algunas diferencias entre modelos — úsalo como orientación":"Los modelos discrepan hoy — toma el pronóstico con precaución"}
-                  </div>
-                </>
-              ) : null}
-            </div>
-          </div>
         )}
 
         {/* QUICK CITIES */}
