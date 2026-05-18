@@ -6,15 +6,72 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { cityName, type, context, conf } = req.body;
-  if (!cityName || !type || !context) {
-    return res.status(400).json({ error: 'Missing parameters' });
-  }
+  const { cityName, type, context, conf, weatherData } = req.body;
+  if (!cityName || !type) return res.status(400).json({ error: 'Missing parameters' });
 
   const key = process.env.ANTHROPIC_KEY;
-  if (!key) return res.status(500).json({ error: 'No Anthropic key configured' });
+  if (!key) return res.status(500).json({ error: 'No Anthropic key' });
 
-  const labels = { now: 'ahora mismo', '24h': 'próximas horas de hoy', '7d': 'esta semana' };
+  // Build precise weather context
+  const { temp, feels, humidity, wind, precip, precipProb, condition, maxTemp, minTemp, rainHours } = weatherData || {};
+
+  let systemPrompt = '';
+  let userPrompt = '';
+
+  if (type === 'now') {
+    systemPrompt = `Eres el asistente meteorológico de Meteoverso. Genera UN veredicto en 2 frases máximo en español.
+PRIORIDADES (en orden):
+1. TORMENTAS/FENÓMENOS ESPECIALES: Si la condición incluye tormenta, granizo, nieve intensa o viento>70km/h — ALERTA SIEMPRE, es lo primero
+2. LLUVIA: Solo menciona paraguas si probabilidad_lluvia>40% O precipitacion>0.5mm
+3. VIENTO: Si viento>40km/h menciona el efecto en la sensación térmica
+4. TEMPERATURA: Si >28°C habla de calor, si <8°C habla de frío y abrigo
+5. SENSACIÓN: Si sensacion es 3+ grados menor que temperatura, menciona que se siente más frío de lo que marca
+6. DÍA AGRADABLE: Si todo normal, di que es buen día y qué actividades van bien
+REGLAS:
+- Coherencia absoluta con los datos
+- Nunca menciones lluvia si precipitacion=0 Y probabilidad<20%
+- Tono cercano y práctico, sin tecnicismos
+- 2 frases máximo`;
+
+    userPrompt = `Ciudad: ${cityName}
+Temperatura: ${temp}°C | Sensación térmica: ${feels}°C
+Condición: ${condition}
+Probabilidad lluvia: ${precipProb}% | Precipitación: ${precip}mm
+Viento: ${wind}km/h | Humedad: ${humidity}%
+Fiabilidad modelos: ${conf}%
+
+Genera el veredicto para AHORA MISMO.`;
+
+  } else if (type === '24h') {
+    systemPrompt = `Eres el asistente meteorológico de Meteoverso. Genera UN veredicto en 2 frases sobre las próximas horas.
+REGLAS ESTRICTAS:
+- Solo menciona paraguas si hay horas con lluvia probable (>40%)
+- Menciona la temperatura máxima y mínima del día
+- Si hay cambios bruscos de temperatura, avisa
+- Si hay horas de viento fuerte, menciónalas
+- Sé directo y práctico. Sin tecnicismos.`;
+
+    userPrompt = `Ciudad: ${cityName}
+Temperatura máxima: ${maxTemp}°C | Mínima: ${minTemp}°C
+Horas con lluvia probable (>40%): ${rainHours}
+Fiabilidad: ${conf}%
+Contexto adicional: ${context}
+
+Genera el veredicto para las PRÓXIMAS 24 HORAS.`;
+
+  } else {
+    systemPrompt = `Eres el asistente meteorológico de Meteoverso. Genera UN veredicto en 2 frases sobre la semana.
+REGLAS ESTRICTAS:
+- Resume la tendencia general de la semana
+- Menciona los días más destacados (más calor, lluvia, frío)
+- Sé directo y práctico. Sin tecnicismos.`;
+
+    userPrompt = `Ciudad: ${cityName}
+Resumen semanal: ${context}
+Fiabilidad: ${conf}%
+
+Genera el veredicto para ESTA SEMANA.`;
+  }
 
   try {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
@@ -26,18 +83,15 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 100,
-        system: `Eres el asistente de Meteoverso. Da UN VEREDICTO muy corto en 1-2 frases en español, tono cercano y práctico. Sin tecnicismos. Di exactamente qué esperar: si llevar paraguas, si hace calor, si es buen día. ${type === 'now' ? 'Habla del momento actual.' : type === '24h' ? 'Habla de las próximas horas de hoy.' : 'Habla del tiempo esta semana.'} Fiabilidad ${conf}%. Sin asteriscos ni markdown.`,
-        messages: [{ role: 'user', content: `Ciudad: ${cityName}. ${context} Concordancia: ${conf}%. Veredicto para ${labels[type]}:` }],
+        max_tokens: 120,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
       }),
     });
 
     const d = await r.json();
-    console.log('Claude response:', JSON.stringify(d).slice(0, 500));
     const veredicto = d.content?.find(b => b.type === 'text')?.text?.trim();
-
-    if (!veredicto) throw new Error('Claude error: ' + JSON.stringify(d.error || d));
-
+    if (!veredicto) throw new Error('No veredicto');
     return res.status(200).json({ veredicto });
   } catch (e) {
     return res.status(500).json({ error: e.message });
