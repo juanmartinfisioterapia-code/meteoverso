@@ -6,7 +6,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { cityName, type, context, conf } = req.body;
+  const { cityName, type, context, conf, hour } = req.body;
   if (!cityName || !type) return res.status(400).json({ error: 'Missing parameters' });
 
   const key = process.env.ANTHROPIC_KEY;
@@ -14,7 +14,16 @@ export default async function handler(req, res) {
 
   const labels = { now: 'ahora mismo', '24h': 'próximas horas', '7d': 'esta semana' };
 
+  // Time of day context
+  const h = hour ?? new Date().getHours();
+  const timeContext = h >= 6 && h < 12 ? "Es por la mañana."
+    : h >= 12 && h < 18 ? "Es por la tarde."
+    : h >= 18 && h < 23 ? "Es por la noche."
+    : "Es de madrugada.";
+
   const systemPrompt = `Eres el asistente meteorológico de Meteoverso. Genera UN veredicto en 2 frases en español.
+
+CONTEXTO TEMPORAL: ${timeContext} Adapta el consejo a este momento del día — no recomiendes salir a pasear si es de madrugada, no digas "esta mañana" si es de noche, etc.
 
 PRIORIDADES EN ORDEN:
 1. Si hay tormenta, granizo o nieve intensa → avisa siempre primero
@@ -23,11 +32,11 @@ PRIORIDADES EN ORDEN:
 4. Si temperatura > 28°C → menciona calor
 5. Si temperatura < 8°C → menciona frío y abrigo
 6. Si sensación térmica es 3°C menor que temperatura → menciona que se siente más frío
-7. Si todo normal → di que es buen día y qué se puede hacer
+7. Si todo normal → consejo práctico adaptado a la hora del día
 
 REGLAS:
-- NUNCA menciones paraguas si la precipitación es 0mm y probabilidad < 20%
-- Sé coherente con los datos exactos
+- NUNCA menciones paraguas si precipitación es 0mm y probabilidad < 20%
+- Coherente con los datos y con la hora
 - Tono cercano, práctico, sin tecnicismos
 - Máximo 2 frases`;
 
@@ -43,7 +52,7 @@ REGLAS:
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 120,
         system: systemPrompt,
-        messages: [{ role: 'user', content: `Ciudad: ${cityName}. ${context} Fiabilidad modelos: ${conf}%. Veredicto para ${labels[type]}:` }],
+        messages: [{ role: 'user', content: `Ciudad: ${cityName}. ${context} Fiabilidad: ${conf}%. Veredicto para ${labels[type]}:` }],
       }),
     });
 
