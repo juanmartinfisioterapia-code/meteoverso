@@ -14,20 +14,30 @@ export default async function handler(req, res) {
 
   const labels = { now: 'ahora mismo', '24h': 'próximas horas', '7d': 'esta semana' };
 
+  // Calculate time of day server-side (Spain/Portugal timezone UTC+1/+2)
+  const now = new Date();
+  const h = (now.getUTCHours() + 1) % 24; // UTC+1 approximate
+  const timeContext = h >= 6 && h < 12 ? "Es por la mañana."
+    : h >= 12 && h < 18 ? "Es por la tarde."
+    : h >= 18 && h < 23 ? "Es por la noche."
+    : "Es de madrugada.";
+
   const systemPrompt = `Eres el asistente meteorológico de Meteoverso. Genera UN veredicto en 2 frases en español.
 
-PRIORIDADES EN ORDEN:
-1. Si hay tormenta, granizo o nieve intensa → avisa siempre primero
-2. Si probabilidad de lluvia > 40% → recomienda paraguas
-3. Si viento > 40km/h → menciona el viento
-4. Si temperatura > 28°C → menciona calor
-5. Si temperatura < 8°C → menciona frío y abrigo
-6. Si sensación térmica es 3°C menor que temperatura → menciona que se siente más frío
-7. Si todo normal → di que es buen día y qué se puede hacer
+${type === 'now' ? `HORA ACTUAL: ${timeContext} El veredicto debe ser coherente con este momento — si es de noche o madrugada, no sugieras actividades al aire libre como pasear o hacer deporte. Si es de mañana o tarde, puedes sugerirlas si el tiempo lo permite.` : ''}
+
+PRIORIDADES:
+1. Tormenta/granizo/nieve intensa → avisa primero
+2. Lluvia probable >40% → recomienda paraguas
+3. Viento >40km/h → menciona el viento
+4. Temperatura >28°C → menciona calor
+5. Temperatura <8°C → menciona frío y abrigo
+6. Sensación 3°C menor → menciona que se siente más frío
+7. Tiempo normal → consejo práctico coherente con la hora
 
 REGLAS:
-- NUNCA menciones paraguas si la precipitación es 0mm y probabilidad < 20%
-- Sé coherente con los datos exactos
+- NUNCA menciones paraguas si precipitación 0mm y probabilidad <20%
+- Coherente con los datos y con la hora del día
 - Tono cercano, práctico, sin tecnicismos
 - Máximo 2 frases`;
 
@@ -43,7 +53,7 @@ REGLAS:
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 120,
         system: systemPrompt,
-        messages: [{ role: 'user', content: `Ciudad: ${cityName}. ${context} Fiabilidad modelos: ${conf}%. Veredicto para ${labels[type]}:` }],
+        messages: [{ role: 'user', content: `Ciudad: ${cityName}. ${context} Fiabilidad: ${conf}%. Veredicto para ${labels[type]}:` }],
       }),
     });
 
