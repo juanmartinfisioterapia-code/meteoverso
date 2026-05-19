@@ -64,8 +64,8 @@ PRIORIDADES:
 2. Lluvia >40% → recomienda paraguas
 3. Viento >40km/h → menciona el viento
 4. Temperatura >28°C → calor
-5. Temperatura <8°C → frío y abrigo
-6. Sensación 3°C menor → se siente más frío
+5. Temperatura <8°C de día O <19°C de noche → recomienda chaqueta (más si hay viento)
+6. Sensación 3°C menor → se siente más frío de lo que marca
 7. Noche despejada con luna visible → menciónala
 8. Normal → consejo coherente con la hora
 
