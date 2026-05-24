@@ -102,13 +102,19 @@ async function fetchWeatherDirect(lat, lon, param) {
   const daily = [];
   if (d.daily?.time) {
     for (let i = 0; i < d.daily.time.length; i++) {
+      const maxT = d.daily.temperature_2m_max[i];
+      const minT = d.daily.temperature_2m_min[i];
+      // Skip days with no temperature data or invalid data (0/0 means no data)
+      if (maxT == null || minT == null) continue;
+      if (maxT === 0 && minT === 0) continue;
+      if (maxT < -50 || maxT > 60) continue;
       daily.push({
         date: new Date(d.daily.time[i] + "T12:00:00"),
-        tempMax: Math.round(d.daily.temperature_2m_max[i]),
-        tempMin: Math.round(d.daily.temperature_2m_min[i]),
+        tempMax: Math.round(maxT),
+        tempMin: Math.round(minT),
         precip: +(d.daily.precipitation_sum[i]||0).toFixed(1),
         precipProb: d.daily.precipitation_probability_max[i] ?? 0,
-        wind: Math.round(d.daily.wind_speed_10m_max[i]),
+        wind: Math.round(d.daily.wind_speed_10m_max[i] ?? 0),
         windD: d.daily.wind_direction_10m_dominant[i],
         uv: d.daily.uv_index_max?.[i],
         sunrise: d.daily.sunrise?.[i],
@@ -204,33 +210,49 @@ async function generateVeredicto(results, cityName, type) {
   const temps = MODELS.map(m => results[m.id]?.temp).filter(v => v != null);
   const spread = temps.length > 1 ? Math.max(...temps) - Math.min(...temps) : 0;
   const conf = spread===0?100:spread===1?85:spread===2?65:spread<=4?45:20;
-  let context = "";
-  if (type === "now") {
-    context = `Ahora: ${primary.temp}C ${primary.info.label}, viento ${primary.wind}km/h, humedad ${primary.humidity}%. Sensacion ${primary.feels}C.`;
-  } else if (type === "24h") {
-    const maxT = primary.hourly ? Math.max(...primary.hourly.map(h=>h.temp)) : primary.temp;
-    const minT = primary.hourly ? Math.min(...primary.hourly.map(h=>h.temp)) : primary.temp;
-    const rainH = primary.hourly?.filter(h=>h.precipProb>40).length ?? 0;
-    context = `24h: max ${maxT}C min ${minT}C. Horas con lluvia: ${rainH}.`;
-  } else {
-    const week = primary.daily?.slice(0,5).map((d,i)=>`${i===0?"Hoy":DAYS_ES[d.date.getDay()]}: ${d.tempMax}/${d.tempMin}C lluvia ${d.precipProb}%`).join(", ");
-    context = `Semana: ${week}`;
-  }
+
+  // Build precise weather data
+  const maxTemp = primary.hourly ? Math.max(...primary.hourly.map(h=>h.temp)) : primary.temp;
+  const minTemp = primary.hourly ? Math.min(...primary.hourly.map(h=>h.temp)) : primary.temp;
+  const rainHours = primary.hourly?.filter(h=>h.precipProb>40).length ?? 0;
+  const week = primary.daily?.slice(0,7).map((d,i)=>`${i===0?"Hoy":i===1?"Mañana":DAYS_ES[d.date.getDay()]}: ${d.tempMax}°/${d.tempMin}° lluvia ${d.precipProb}%`).join(", ");
+
+  const weatherData = {
+    temp: primary.temp,
+    feels: primary.feels,
+    humidity: primary.humidity,
+    wind: primary.wind,
+    precip: primary.precip,
+    precipProb: primary.daily?.[0]?.precipProb ?? 0,
+    condition: primary.info.label,
+    maxTemp,
+    minTemp,
+    rainHours,
+  };
+
+  const context = type === "7d" ? `Semana: ${week}` : "";
+
   try {
     const r = await fetch("/api/veredicto", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cityName, type, context, conf }),
+      body: JSON.stringify({ cityName, type, context, conf, weatherData, hour: new Date().getHours() }),
     });
     if (!r.ok) throw new Error("error");
     const d = await r.json();
     return d.veredicto ?? null;
   } catch {
-    if (primary.temp > 30) return `Dia muy caluroso en ${cityName} con ${primary.temp}C. Hidratate bien.`;
-    if ((primary.daily?.[0]?.precipProb ?? 0) > 60) return `Alta probabilidad de lluvia en ${cityName}. Lleva paraguas.`;
-    if (primary.wind > 40) return `Viento fuerte en ${cityName} (${primary.wind}km/h). Ten precaucion.`;
-    if (primary.temp < 5) return `Frio intenso en ${cityName} con ${primary.temp}C. Abrigate bien.`;
-    return `Tiempo ${primary.info.label.toLowerCase()} en ${cityName} con ${primary.temp}C. ${conf>=80?"Los modelos coinciden.":"Consulta los modelos para mas detalle."}`;
+    // Local fallback con prioridades
+    const cond = weatherData.condition.toLowerCase();
+    if (cond.includes("tormenta") || cond.includes("granizo")) return `⚠️ Alerta de tormenta en ${cityName}. Evita actividades al aire libre.`;
+    if (cond.includes("nieve") && weatherData.temp < 3) return `⚠️ Nevada en ${cityName}. Precaución en carreteras y exteriores.`;
+    if (weatherData.wind > 70) return `⚠️ Viento muy fuerte en ${cityName} (${weatherData.wind}km/h). Peligro en exteriores.`;
+    if (weatherData.precipProb > 60) return `Lluvia probable en ${cityName} hoy. Lleva paraguas.`;
+    if (weatherData.temp > 30) return `Calor intenso en ${cityName} con ${weatherData.temp}°C. Protégete del sol.`;
+    if (weatherData.wind > 40) return `Viento fuerte en ${cityName} (${weatherData.wind}km/h). Ten precaución.`;
+    if (weatherData.temp < 8) return `Frío en ${cityName} con ${weatherData.temp}°C. Abrígate bien.`;
+    if (weatherData.feels <= weatherData.temp - 3) return `${weatherData.temp}°C en ${cityName} pero se sienten ${weatherData.feels}°C. Lleva chaqueta.`;
+    return `Tiempo ${weatherData.condition.toLowerCase()} en ${cityName} con ${weatherData.temp}°C. ${conf>=80?"Pronóstico fiable hoy.":"Consulta los modelos para más detalle."}`;
   }
 }
 
@@ -290,11 +312,19 @@ function WorldMap({ onCitySelect }) {
         L.polyline([[-90, lng],[90, lng]], gridStyle).addTo(map);
       }
 
-      // Rain radar layer from RainViewer (free, no key needed)
-      L.tileLayer('https://tilecache.rainviewer.com/v2/radar/nowcast/256/{z}/{x}/{y}/2/1_1.png', {
-        opacity: 0.4,
-        maxZoom: 19,
-      }).addTo(map);
+      // Rain radar from RainViewer API - get latest frame
+      fetch('https://api.rainviewer.com/public/weather-maps.json')
+        .then(r => r.json())
+        .then(data => {
+          const latest = data.radar?.past?.slice(-1)[0]?.path;
+          if (latest) {
+            L.tileLayer(`https://tilecache.rainviewer.com${latest}/256/{z}/{x}/{y}/2/1_1.png`, {
+              opacity: 0.5,
+              maxZoom: 13,
+            }).addTo(map);
+          }
+        })
+        .catch(() => {});
 
       // Double click to select city
       map.on('dblclick', async (e) => {
@@ -608,6 +638,19 @@ export default function App() {
   const isLoading = status === "loading" || status === "searching";
   const primary = data["best"];
 
+  // Build consensus for fiabilidad bar
+  const buildCon = () => {
+    const valid = MODELS.map(m => data[m.id]).filter(d => d?.temp != null);
+    if (valid.length < 2) return null;
+    const temps = valid.map(d=>d.temp);
+    const spread = Math.max(...temps) - Math.min(...temps);
+    const conf = spread===0?100:spread===1?85:spread===2?65:spread<=4?45:20;
+    const cColor = conf>=80?"#86EFAC":conf>=50?"#FCD34D":"#F87171";
+    const cLabel = conf>=80?"Alta concordancia":conf>=50?"Concordancia media":"Modelos discrepan";
+    return { conf, spread, cColor, cLabel };
+  };
+  const con = buildCon();
+
   return (
     <div style={{minHeight:"100vh",background:"#06101e",color:"#e2e8f0",fontFamily:"'DM Sans',system-ui,sans-serif",overflowX:"hidden"}}>
       <style>{`
@@ -764,6 +807,19 @@ export default function App() {
               {/* Compare buttons */}
               {status==="done"&&primary&&!primary.error&&(
                 <div style={{marginTop:8}}>
+                  {/* Barra fiabilidad ahora mismo */}
+                  {con&&(
+                    <div style={{marginBottom:12}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
+                        <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>🎯 Fiabilidad del pronóstico</span>
+                        <span style={{color:con.cColor,fontSize:12,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{con.conf}% · {con.cLabel}</span>
+                      </div>
+                      <div style={{background:"rgba(255,255,255,.06)",borderRadius:6,height:7,overflow:"hidden"}}>
+                        <div style={{width:`${con.conf}%`,height:"100%",background:con.cColor,borderRadius:6,transition:"width 1.2s ease"}}/>
+                      </div>
+                      <div style={{color:"#1e3a5f",fontSize:10,marginTop:3}}>{con.spread}°C de dispersión entre modelos</div>
+                    </div>
+                  )}
                   <div style={{color:"#1e3a5f",fontSize:10,textTransform:"uppercase",letterSpacing:".1em",fontFamily:"'DM Mono',monospace",marginBottom:8}}>Comparar con</div>
                   <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                     {SECONDARY.map(m=>(
