@@ -523,6 +523,13 @@ export default function App() {
   }, []);
 
   const skipDrop = useRef(false);
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem('mv_last');
+      if (s) { const {lat,lon,name} = JSON.parse(s); if(lat&&lon&&name){setInput(name);setTimeout(()=>runModels(lat,lon,name),200);} }
+    } catch {}
+  // eslint-disable-next-line
+  }, []);
 
 
 
@@ -547,7 +554,7 @@ export default function App() {
   };
 
   const runModels = async (lat, lon, name) => {
-    setShowDrop(false); setLoc({lat,lon,name}); setData({});
+    try{localStorage.setItem("mv_last",JSON.stringify({lat,lon,name}));}catch{} setShowDrop(false); setLoc({lat,lon,name}); setData({});
     setStatus("loading"); setErrMsg("");
     setVNow(""); setV24h(""); setV7d("");
     setVLoad({now:true,"24h":true,"7d":true});
