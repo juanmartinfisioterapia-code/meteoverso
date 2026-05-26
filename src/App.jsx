@@ -230,7 +230,7 @@ async function generateVeredicto(results, cityName, type) {
     rainHours,
   };
 
-  const context = type==="now" ? `Temp: ${primary.temp}C, sensacion: ${primary.feels}C, ${primary.info.label}, viento: ${primary.wind}km/h, humedad: ${primary.humidity}%, precip: ${primary.precip}mm, prob lluvia: ${primary.daily?.[0]?.precipProb??0}%` : type==="24h" ? `Max: ${primary.hourly?Math.max(...primary.hourly.map(h=>h.temp)):primary.temp}C, Min: ${primary.hourly?Math.min(...primary.hourly.map(h=>h.temp)):primary.temp}C, horas lluvia: ${primary.hourly?.filter(h=>h.precipProb>40).length??0}` : `Semana: ${week}`;
+  const context = type === "7d" ? `Semana: ${week}` : "";
 
   try {
     const r = await fetch("/api/veredicto", {
@@ -515,22 +515,6 @@ export default function App() {
   const deb = useRef(null);
 
   useEffect(() => {
-    if (didAutoLoad.current) return;
-    didAutoLoad.current = true;
-    try {
-      const saved = localStorage.getItem('mv_last');
-      if (saved) {
-        const { lat, lon, name } = JSON.parse(saved);
-        if (lat && lon && name) {
-          setInput(name);
-          setTimeout(() => runModels(lat, lon, name), 100);
-        }
-      }
-    } catch {}
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
     const handler = e => { e.preventDefault(); setDeferredPrompt(e); setShowInstall(true); };
     window.addEventListener('beforeinstallprompt', handler);
     const isIOS = /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
@@ -563,7 +547,6 @@ export default function App() {
   };
 
   const runModels = async (lat, lon, name) => {
-    try { localStorage.setItem('mv_last', JSON.stringify({lat, lon, name})); } catch {}
     setShowDrop(false); setLoc({lat,lon,name}); setData({});
     setStatus("loading"); setErrMsg("");
     setVNow(""); setV24h(""); setV7d("");
@@ -1003,3 +986,4 @@ export default function App() {
     </div>
   );
 }
+// force martes, 26 de mayo de 2026, 12:01:56 CEST
