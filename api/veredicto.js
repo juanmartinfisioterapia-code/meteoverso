@@ -100,3 +100,4 @@ REGLAS:
     return res.status(500).json({ error: e.message });
   }
 }
+// updated martes, 26 de mayo de 2026, 11:56:34 CEST
