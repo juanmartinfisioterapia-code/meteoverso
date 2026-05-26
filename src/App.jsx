@@ -230,7 +230,7 @@ async function generateVeredicto(results, cityName, type) {
     rainHours,
   };
 
-  const context = type === "7d" ? `Semana: ${week}` : "";
+  const context = type === "now" ? `Temp: ${primary.temp}C sensacion ${primary.feels}C ${primary.info.label} viento ${primary.wind}kmh humedad ${primary.humidity}% precip ${primary.precip}mm` : type === "24h" ? `Max ${primary.hourly ? Math.max(...primary.hourly.map(h=>h.temp)) : primary.temp}C Min ${primary.hourly ? Math.min(...primary.hourly.map(h=>h.temp)) : primary.temp}C` : `Semana: ${week}`;
 
   try {
     const r = await fetch("/api/veredicto", {
