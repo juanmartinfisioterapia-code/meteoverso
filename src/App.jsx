@@ -622,7 +622,7 @@ export default function App() {
           const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=es`, {headers:{'User-Agent':'Meteoverso/1.0'}});
           const d = await r.json();
           const addr = d.address || {}; const name = addr.city || addr.town || addr.village || addr.municipality || addr.suburb || addr.county || addr.state_district || d.name || "Tu ubicación";
-          setInput(name); setGeoLoading(false); runModels(lat, lon, name);
+          skipDrop.current=true; setInput(name); setGeoLoading(false); runModels(lat, lon, name);
         } catch { setInput("Tu ubicación"); setGeoLoading(false); runModels(lat, lon, "Tu ubicación"); }
       },
       err => { setGeoLoading(false); setErrMsg(err.code===1?"Permiso denegado.":"No se pudo obtener ubicación."); },
