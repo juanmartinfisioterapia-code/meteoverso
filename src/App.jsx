@@ -619,9 +619,9 @@ export default function App() {
       async pos => {
         const {latitude:lat, longitude:lon} = pos.coords;
         try {
-          const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=a&latitude=${lat}&longitude=${lon}&count=1&language=es&format=json`);
+          const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=es`, {headers:{'User-Agent':'Meteoverso/1.0'}});
           const d = await r.json();
-          const name = d.results?.[0]?.name ?? "Tu ubicación";
+          const addr = d.address || {}; const name = addr.city || addr.town || addr.village || addr.municipality || addr.suburb || addr.county || addr.state_district || d.name || "Tu ubicación";
           setInput(name); setGeoLoading(false); runModels(lat, lon, name);
         } catch { setInput("Tu ubicación"); setGeoLoading(false); runModels(lat, lon, "Tu ubicación"); }
       },
