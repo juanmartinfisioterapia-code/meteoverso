@@ -93,7 +93,8 @@ REGLAS:
     });
 
     const d = await r.json();
-    const veredicto = d.content?.find(b => b.type === 'text')?.text?.trim();
+    let veredicto = d.content?.find(b => b.type === 'text')?.text?.trim();
+    if (veredicto) veredicto = veredicto.replace(/\*\*/g, '').replace(/^#+\s*/gm, '').trim();
     if (!veredicto) throw new Error('No veredicto');
     return res.status(200).json({ veredicto });
   } catch (e) {
