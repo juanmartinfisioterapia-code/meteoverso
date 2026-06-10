@@ -529,22 +529,24 @@ const autoGeoRan = useRef(false);
     if (autoGeoRan.current) return;
     autoGeoRan.current = true;
     const hasUsedGeo = localStorage.getItem('mv_geo_used');
-    if (hasUsedGeo && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        async pos => {
-          const {latitude:lat, longitude:lon} = pos.coords;
-          try {
-            const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=es`, {headers:{'User-Agent':'Meteoverso/1.0'}});
-            const d = await r.json();
-            const addr = d.address || {};
-            const name = addr.city || addr.town || addr.village || addr.municipality || addr.suburb || addr.county || d.name || 'Tu ubicacion';
-            skipDrop.current = true;
-            setInput(name);
-            runModels(lat, lon, name);
-          } catch { runModels(lat, lon, 'Tu ubicacion'); }
-        },
-        () => {}
-      );
+if (hasUsedGeo && navigator.geolocation) {
+      setTimeout(() => {
+        navigator.geolocation.getCurrentPosition(
+          async pos => {
+            const {latitude:lat, longitude:lon} = pos.coords;
+            try {
+              const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=es`, {headers:{'User-Agent':'Meteoverso/1.0'}});
+              const d = await r.json();
+              const addr = d.address || {};
+              const name = addr.city || addr.town || addr.village || addr.municipality || addr.suburb || addr.county || d.name || 'Tu ubicacion';
+              skipDrop.current = true;
+              setInput(name);
+              runModels(lat, lon, name);
+            } catch { runModels(lat, lon, 'Tu ubicacion'); }
+          },
+          () => {}
+        );
+      }, 500);
     }
   }, []);
 
