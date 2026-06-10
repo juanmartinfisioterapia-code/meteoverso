@@ -523,6 +523,32 @@ export default function App() {
   }, []);
 
   const skipDrop = useRef(false);
+  const autoGeoRan = useRef(false);
+
+  useEffect(() => {
+    if (autoGeoRan.current) return;
+    autoGeoRan.current = true;
+    if (navigator.permissions) {
+      navigator.permissions.query({name: 'geolocation'}).then(result => {
+        if (result.state === 'granted') {
+          navigator.geolocation.getCurrentPosition(
+            async pos => {
+              const {latitude:lat, longitude:lon} = pos.coords;
+              try {
+                const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=es`, {headers:{'User-Agent':'Meteoverso/1.0'}});
+                const d = await r.json();
+                const addr = d.address || {};
+                const name = addr.city || addr.town || addr.village || addr.municipality || addr.suburb || addr.county || d.name || 'Tu ubicacion';
+                skipDrop.current = true;
+                setInput(name);
+                runModels(lat, lon, name);
+              } catch { runModels(lat, lon, 'Tu ubicacion'); }
+            }, () => {}
+          );
+        }
+      }).catch(() => {});
+    }
+  }, []);
 
 
 
