@@ -230,7 +230,7 @@ async function generateVeredicto(results, cityName, type) {
     rainHours,
   };
 
-  const context = type === "now" ? `Temp: ${primary.temp}C sensacion ${primary.feels}C ${primary.info.label} viento ${primary.wind}kmh humedad ${primary.humidity}% precip ${primary.precip}mm` : type === "24h" ? `Max ${primary.hourly ? Math.max(...primary.hourly.map(h=>h.temp)) : primary.temp}C Min ${primary.hourly ? Math.min(...primary.hourly.map(h=>h.temp)) : primary.temp}C` : `Semana: ${week}`;
+  const context = type==="now" ? `Temp: ${primary.temp}C sensacion ${primary.feels}C ${primary.info.label} viento ${primary.wind}kmh humedad ${primary.humidity}% precip ${primary.precip}mm` : type==="24h" ? `Max ${primary.hourly ? Math.max(...primary.hourly.map(h=>h.temp)) : primary.temp}C Min ${primary.hourly ? Math.min(...primary.hourly.map(h=>h.temp)) : primary.temp}C` : `Semana: ${week}`;
 
   try {
     const r = await fetch("/api/veredicto", {
@@ -619,10 +619,10 @@ export default function App() {
       async pos => {
         const {latitude:lat, longitude:lon} = pos.coords;
         try {
-          const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=a&latitude=${lat}&longitude=${lon}&count=1&language=es&format=json`);
+          const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=es`, {headers:{'User-Agent':'Meteoverso/1.0'}});
           const d = await r.json();
-          const name = d.results?.[0]?.name ?? "Tu ubicación";
-          setInput(name); setGeoLoading(false); runModels(lat, lon, name);
+          const addr = d.address || {}; const name = addr.city || addr.town || addr.village || addr.municipality || addr.suburb || addr.county || addr.state_district || d.name || "Tu ubicación";
+          skipDrop.current=true; setInput(name); setGeoLoading(false); runModels(lat, lon, name);
         } catch { setInput("Tu ubicación"); setGeoLoading(false); runModels(lat, lon, "Tu ubicación"); }
       },
       err => { setGeoLoading(false); setErrMsg(err.code===1?"Permiso denegado.":"No se pudo obtener ubicación."); },
@@ -986,4 +986,3 @@ export default function App() {
     </div>
   );
 }
-// force martes, 26 de mayo de 2026, 12:01:56 CEST
