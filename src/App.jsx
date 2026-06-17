@@ -927,7 +927,6 @@ style={{width:"100%",display:status==="done"?"none":"flex",alignItems:"center",j
 
             {/* ── 7 DÍAS ── */}
             <div style={{borderTop:"1px solid rgba(255,255,255,.06)",paddingTop:24}}>
-              <VeredictoBox text={v7d} loading={vLoad["7d"]} type="7d"/>
               {/* Primary daily */}
               {primary?.daily?.length>0&&(
                 <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:8}}>
@@ -957,6 +956,8 @@ style={{width:"100%",display:status==="done"?"none":"flex",alignItems:"center",j
                   ))}
                 </div>
               )}
+                            <VeredictoBox text={v7d} loading={vLoad["7d"]} type="7d"/>
+
               {/* Compare buttons 7d */}
               {status==="done"&&primary&&!primary.error&&(
                 <div>
