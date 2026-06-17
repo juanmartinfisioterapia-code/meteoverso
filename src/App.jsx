@@ -726,7 +726,7 @@ const autoGeoTried = useRef(false);
         {/* SEARCH */}
         <div style={{position:"relative",marginBottom:20,animation:"fadeUp .5s ease .08s both"}}>
           <button onClick={useGeo} disabled={isLoading||geoLoading} className="geo-btn"
-            style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"linear-gradient(135deg,rgba(56,189,248,.1),rgba(96,165,250,.08))",border:"1px solid rgba(56,189,248,.25)",borderRadius:12,padding:"11px",marginBottom:8,cursor:isLoading||geoLoading?"not-allowed":"pointer",transition:"all .2s",opacity:isLoading||geoLoading?.6:1}}>
+style={{width:"100%",display:status==="done"?"none":"flex",alignItems:"center",justifyContent:"center",gap:8,background:"linear-gradient(135deg,rgba(56,189,248,.1),rgba(96,165,250,.08))",border:"1px solid rgba(56,189,248,.25)",borderRadius:12,padding:"11px",marginBottom:8,cursor:isLoading||geoLoading?"not-allowed":"pointer",transition:"all .2s",opacity:isLoading||geoLoading?.6:1}}>
             {geoLoading?<div style={{width:14,height:14,border:"2px solid rgba(56,189,248,.3)",borderTopColor:"#38BDF8",borderRadius:"50%",animation:"spin .7s linear infinite"}}/>:<span style={{fontSize:16}}>📍</span>}
             <span style={{color:"#38BDF8",fontSize:13,fontWeight:600}}>{geoLoading?"Detectando...":"Usar mi ubicación"}</span>
           </button>
