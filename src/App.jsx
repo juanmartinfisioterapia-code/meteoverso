@@ -32,7 +32,13 @@ const WMO_NIGHT = {
   2:{icon:"☁️",label:"Parc. nublado"},
   3:{icon:"☁️",label:"Nublado"},
 };
-
+const adjustWeatherCode = (code, precipProb, maxTemp) => {
+  // Si hay muy poca probabilidad de lluvia y hace calor, suavizar el codigo de nubes
+  if (precipProb < 15 && maxTemp >= 25 && code === 3) return 1;
+  if (precipProb < 10 && maxTemp >= 20 && code === 3) return 2;
+  if (precipProb < 20 && code === 2 && maxTemp >= 28) return 1;
+  return code;
+};
 const wmo = (c, date) => {
   const night = isNight(date);
   if (night && WMO_NIGHT[c]) return {...WMO_NIGHT[c], color: WMO[c]?.color ?? "#94A3B8"};
@@ -180,7 +186,7 @@ async function fetchWeather(lat, lon, param) {
         uv: d.daily.uv_index_max?.[i],
         sunrise: d.daily.sunrise?.[i],
         sunset: d.daily.sunset?.[i],
-        info: wmo(d.daily.weather_code[i]),
+      info: wmo(adjustWeatherCode(d.daily.weather_code[i], d.daily.precipitation_probability_max[i] ?? 0, maxT)),
       });
     }
   }
