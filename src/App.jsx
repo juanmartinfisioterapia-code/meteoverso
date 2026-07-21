@@ -832,18 +832,18 @@ style={{width:"100%",display:status==="done"?"none":"flex",alignItems:"center",j
               {primary?.daily?.length>0&&(
                 <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:8}}>
                   {primary.daily.map((d,i)=>(
-                    <div key={i} style={{background:"rgba(96,165,250,.05)",border:"1px solid rgba(96,165,250,.15)",borderRadius:12,padding:"12px 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+                    <div key={i} style={{background:"rgba(96,165,250,.05)",border:"1px solid rgba(96,165,250,.15)",borderRadius:12,padding:"8px 12px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
                       <div style={{minWidth:64}}>
-                        <div style={{fontFamily:"'Syne',sans-serif",fontSize:13,fontWeight:900,color:i===0?"#38BDF8":i===1?"#60A5FA":"#2e6b8a"}}>
+                        <div style={{fontFamily:"'Syne',sans-serif",fontSize:11,fontWeight:900,color:i===0?"#38BDF8":i===1?"#60A5FA":"#2e6b8a"}}>
                           {i===0?"Hoy":i===1?"Mañana":DAYS_ES[d.date.getDay()]}
                         </div>
                         <div style={{color:"#0f2035",fontSize:10,fontFamily:"'DM Mono',monospace"}}>{d.date.getDate()} {MONTHS_ES[d.date.getMonth()]}</div>
                       </div>
                       <span style={{fontSize:28}}>{d.info.icon}</span>
                       <div style={{display:"flex",alignItems:"baseline",gap:4}}>
-                        <span style={{fontFamily:"'Syne',sans-serif",fontSize:20,fontWeight:900,color:"#f0f9ff"}}>{d.tempMax}°</span>
+                        <span style={{fontFamily:"'Syne',sans-serif",fontSize:17,fontWeight:900,color:"#f0f9ff"}}>{d.tempMax}°</span>
                         <span style={{color:"#1e4060",fontSize:13}}>/</span>
-                        <span style={{fontFamily:"'Syne',sans-serif",fontSize:16,fontWeight:700,color:"#2e6b8a"}}>{d.tempMin}°</span>
+                        <span style={{fontFamily:"'Syne',sans-serif",fontSize:14,fontWeight:700,color:"#2e6b8a"}}>{d.tempMin}°</span>
                       </div>
                       <div style={{marginLeft:"auto",display:"flex",gap:12}}>
                         {[{e:"💧",v:`${d.precipProb}%`},{e:"🌧️",v:`${d.precip}mm`},{e:"💨",v:`${d.wind}km/h`}].map(({e,v})=>(
