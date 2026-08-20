@@ -128,7 +128,7 @@ async function fetchWeatherDirect(lat, lon, param) {
         uv: d.daily.uv_index_max?.[i],
         sunrise: d.daily.sunrise?.[i],
         sunset: d.daily.sunset?.[i],
-        info: wmo(d.daily.weather_code[i]),
+          info: wmoDay(adjustWeatherCode(d.daily.weather_code[i], d.daily.precipitation_probability_max[i] ?? 0, d.daily.temperature_2m_max[i])),
       });
     }
   }
