@@ -942,44 +942,6 @@ style={{width:"100%",display:status==="done"?"none":"flex",alignItems:"center",j
               )}
                             <VeredictoBox text={v7d} loading={vLoad["7d"]} type="7d"/>
 
-              {/* Compare buttons 7d */}
-              {status==="done"&&primary&&!primary.error&&(
-                <div>
-                  <div style={{color:"#1e3a5f",fontSize:10,textTransform:"uppercase",letterSpacing:".1em",fontFamily:"'DM Mono',monospace",marginBottom:8}}>Comparar con</div>
-                  <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                    {SECONDARY.map(m=>(
-                      <div key={m.id} style={{width:"100%"}}>
-                        <CompareButton model={m} expanded={!!expanded[`${m.id}_7d`]} onClick={()=>toggleExpand(m.id,"7d")}/>
-                        {expanded[`${m.id}_7d`]&&data[m.id]?.daily?.length>0&&(
-                          <div style={{display:"flex",flexDirection:"column",gap:4,marginTop:8,animation:"fadeUp .3s ease both"}}>
-                            {data[m.id].daily.map((d,i)=>(
-                              <div key={i} style={{background:m.bg,border:`1px solid ${m.br}`,borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-                                <div style={{minWidth:56}}>
-                                  <div style={{color:m.color,fontSize:11,fontWeight:700}}>{i===0?"Hoy":i===1?"Mañana":DAYS_ES[d.date.getDay()]}</div>
-                                </div>
-                                <span style={{fontSize:22}}>{d.info.icon}</span>
-                                <div style={{display:"flex",alignItems:"baseline",gap:3}}>
-                                  <span style={{fontFamily:"'Syne',sans-serif",fontSize:16,fontWeight:900,color:"#f0f9ff"}}>{d.tempMax}°</span>
-                                  <span style={{color:"#1e4060",fontSize:11}}>/</span>
-                                  <span style={{fontFamily:"'Syne',sans-serif",fontSize:13,fontWeight:700,color:"#2e6b8a"}}>{d.tempMin}°</span>
-                                </div>
-                                <div style={{marginLeft:"auto",display:"flex",gap:10}}>
-                                  {[{e:"💧",v:`${d.precipProb}%`},{e:"🌧️",v:`${d.precip}mm`}].map(({e,v})=>(
-                                    <div key={e} style={{textAlign:"center"}}>
-                                      <div style={{fontSize:9}}>{e}</div>
-                                      <div style={{color:m.color,fontSize:9,fontWeight:600,fontFamily:"'DM Mono',monospace"}}>{v}</div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
           </div>
