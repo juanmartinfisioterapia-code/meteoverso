@@ -46,7 +46,7 @@ export default async function handler(req, res) {
         const chunks = [];
         stream.on('data', c => chunks.push(c));
         stream.on('end', () => {
-          const xml = new TextDecoder('iso-8859-15').decode(Buffer.concat(chunks));
+          const xml = new TextDecoder('utf-8').decode(Buffer.concat(chunks));
           const xmlNorm = normaliza(xml);
           if (header.name.endsWith('.xml') && provincia && xmlNorm.includes(provinciaNorm)) {
             const severidad = (xml.match(/<severity>(.*?)<\/severity>/) || [])[1];
@@ -55,7 +55,8 @@ export default async function handler(req, res) {
             const zona = (xml.match(/<areaDesc>(.*?)<\/areaDesc>/) || [])[1];
             const efectivo = (xml.match(/<effective>(.*?)<\/effective>/) || [])[1];
             const expira = (xml.match(/<expires>(.*?)<\/expires>/) || [])[1];
-            if (severidad && severidad.toLowerCase() !== 'minor') {
+            const yaCaducado = expira && new Date(expira).getTime() < Date.now();
+            if (severidad && severidad.toLowerCase() !== 'minor' && !yaCaducado) {
               avisos.push({
                 nivel: nivelDesdeSeveridad(severidad),
                 evento: evento || 'Aviso meteorologico',
