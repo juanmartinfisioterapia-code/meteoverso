@@ -1,48 +1,37 @@
 export default async function handler(req, res) {
-  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.status(200).end();
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  const { lat, lon } = req.query;
+  if (!lat || !lon) return res.status(400).json({ error: 'lat y lon requeridos' });
 
-  const { endpoint } = req.query;
-  if (!endpoint) {
-    return res.status(400).json({ error: 'Missing endpoint parameter' });
-  }
-
-  const key = process.env.VITE_AEMET_KEY;
-  if (!key) {
-    return res.status(500).json({ error: 'AEMET key not configured' });
-  }
+  const AEMET_KEY = process.env.AEMET_API_KEY;
+  if (!AEMET_KEY) return res.status(500).json({ error: 'API key no configurada' });
 
   try {
-    // Build AEMET URL
-    const aemetUrl = decodeURIComponent(endpoint) + `?api_key=${key}`;
-    
-    const response = await fetch(aemetUrl, {
-      headers: { 'Accept': 'application/json' }
-    });
+    const munRes = await fetch(`https://opendata.aemet.es/opendata/api/maestro/municipios?api_key=${AEMET_KEY}`);
+    const munData = await munRes.json();
+    const listRes = await fetch(munData.datos);
+    const municipios = await listRes.json();
 
-    if (!response.ok) {
-      return res.status(response.status).json({ error: `AEMET error: ${response.status}` });
+    let closest = null;
+    let minDist = Infinity;
+    for (const m of municipios) {
+      const mLat = parseFloat(m.latitud_dec);
+      const mLon = parseFloat(m.longitud_dec);
+      const dist = Math.sqrt(Math.pow(mLat - lat, 2) + Math.pow(mLon - lon, 2));
+      if (dist < minDist) { minDist = dist; closest = m; }
     }
 
-    const data = await response.json();
+    if (!closest) return res.status(404).json({ error: 'Municipio no encontrado' });
 
-    // If AEMET returns a datos URL, fetch that too
-    if (data.datos) {
-      const dataResponse = await fetch(data.datos);
-      if (dataResponse.ok) {
-        const finalData = await dataResponse.json();
-        return res.status(200).json({ success: true, data: finalData, meta: data });
-      }
-    }
+    const codMunicipio = closest.id.replace('id', '');
+    const predRes = await fetch(`https://opendata.aemet.es/opendata/api/prediccion/especifica/municipio/diaria/${codMunicipio}?api_key=${AEMET_KEY}`);
+    const predMeta = await predRes.json();
+    const predData = await (await fetch(predMeta.datos)).json();
 
-    return res.status(200).json({ success: true, data });
-  } catch (error) {
-    return res.status(500).json({ error: error.message });
+    res.status(200).json({ municipio: closest.nombre, codMunicipio, data: predData });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 }
