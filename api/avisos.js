@@ -31,15 +31,24 @@ export default async function handler(req, res) {
     const esGzip = buffer.length >= 2 && buffer[0] === 0x1f && buffer[1] === 0x8b;
     const gunzipped = esGzip ? zlib.gunzipSync(buffer) : buffer;
 
+    function normaliza(s) {
+      return (s || '')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toUpperCase();
+    }
+    const provinciaNorm = normaliza(provincia);
+
     const avisos = [];
     const extract = tar.extract();
 
     await new Promise((resolve, reject) => {
       extract.on('entry', (header, stream, next) => {
-        let xml = '';
-        stream.on('data', c => xml += c.toString('utf-8'));
+        const chunks = [];
+        stream.on('data', c => chunks.push(c));
         stream.on('end', () => {
-          if (header.name.endsWith('.xml') && provincia && xml.includes(provincia)) {
+          const xml = new TextDecoder('iso-8859-15').decode(Buffer.concat(chunks));
+          const xmlNorm = normaliza(xml);
+          if (header.name.endsWith('.xml') && provincia && xmlNorm.includes(provinciaNorm)) {
             const severidad = (xml.match(/<severity>(.*?)<\/severity>/) || [])[1];
             const evento = (xml.match(/<cap:event>(.*?)<\/cap:event>/) || xml.match(/<event>(.*?)<\/event>/) || [])[1];
             const descripcion = (xml.match(/<description>([\s\S]*?)<\/description>/) || [])[1];
