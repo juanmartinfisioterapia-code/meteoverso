@@ -71,8 +71,65 @@ async function fetchGeo(q) {
 }
 
 
+function aemetCodeToWmo(code) {
+  const base = String(code || '').replace('n', '');
+  const map = {
+    '11': 0, '12': 1, '13': 2, '14': 3, '15': 3, '16': 3, '17': 1,
+    '23': 61, '24': 61, '25': 63, '26': 65,
+    '43': 51, '44': 51, '45': 53, '46': 55,
+    '51': 95, '52': 95, '53': 95, '54': 96,
+    '61': 71, '62': 71, '63': 73, '64': 73, '65': 75, '66': 75,
+    '71': 71, '72': 71, '73': 73, '74': 73, '75': 75, '76': 75,
+    '81': 45, '82': 45,
+  };
+  return map[base] ?? 3;
+}
+
+function aemetDirToDeg(dir) {
+  const map = { N:0, NNE:22.5, NE:45, ENE:67.5, E:90, ESE:112.5, SE:135, SSE:157.5,
+    S:180, SSO:202.5, SO:225, OSO:247.5, O:270, ONO:292.5, NO:315, NNO:337.5, C:0 };
+  return map[dir] ?? 0;
+}
+
 async function fetchAEMET(lat, lon) {
-  return await fetchWeatherDirect(lat, lon, "meteofrance_seamless");
+  // Ahora mismo y por horas siguen viniendo de Open-Meteo (AEMET oficial no los da)
+  const base = await fetchWeatherDirect(lat, lon, "meteofrance_seamless");
+
+  try {
+    const r = await fetch(`/api/aemet?lat=${lat}&lon=${lon}`);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const aemet = await r.json();
+    const dias = aemet?.data?.[0]?.prediccion?.dia;
+    if (Array.isArray(dias) && dias.length) {
+      const pick = arr => arr?.find(p => p.periodo === "00-24") ?? arr?.[0];
+      const daily = dias.map(di => {
+        const precip = pick(di.probPrecipitacion);
+        const viento = pick(di.viento);
+        const cielo = pick(di.estadoCielo);
+        const wmoCode = adjustWeatherCode(
+          aemetCodeToWmo(cielo?.value),
+          precip?.value ?? 0,
+          di.temperatura?.maxima ?? 0
+        );
+        return {
+          date: new Date(di.fecha),
+          tempMax: di.temperatura?.maxima ?? null,
+          tempMin: di.temperatura?.minima ?? null,
+          precip: 0,
+          precipProb: precip?.value ?? 0,
+          wind: viento?.velocidad ?? 0,
+          windD: aemetDirToDeg(viento?.direccion),
+          uv: di.uvMax ?? null,
+          info: wmoDay(wmoCode),
+        };
+      }).filter(d => d.tempMax != null && d.tempMin != null);
+      if (daily.length) base.daily = daily;
+    }
+  } catch (e) {
+    console.warn("AEMET oficial no disponible, usando respaldo:", e.message);
+  }
+
+  return base;
 }
 
 async function fetchWeatherDirect(lat, lon, param) {
