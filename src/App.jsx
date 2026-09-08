@@ -498,7 +498,7 @@ function CompareButton({ model, expanded, onClick }) {
   );
 }
 
-function PrimaryCurrentCard({ data, loading }) {
+function PrimaryCurrentCard({ data, loading, allData, hover, onHover }) {
   if (loading) return (
     <div style={{background:"rgba(96,165,250,.06)",border:"1px solid rgba(96,165,250,.2)",borderRadius:18,padding:"24px",marginBottom:10}}>
       {[60,40,80,50].map((w,i)=><div key={i} style={{height:i===0?50:11,width:`${w}%`,background:"rgba(255,255,255,.05)",borderRadius:6,marginBottom:12,animation:"shimmer 1.4s ease infinite"}}/>)}
@@ -506,7 +506,27 @@ function PrimaryCurrentCard({ data, loading }) {
   );
   if (!data || data.error) return null;
   return (
-    <div style={{background:"rgba(96,165,250,.06)",border:"1px solid rgba(96,165,250,.2)",borderRadius:18,padding:"22px 24px",marginBottom:10}}>
+    <div
+      onMouseEnter={()=>onHover&&onHover(true)}
+      onMouseLeave={()=>onHover&&onHover(false)}
+      onClick={()=>onHover&&onHover(h=>!h)}
+      style={{position:"relative",cursor:"pointer",background:"rgba(96,165,250,.06)",border:"1px solid rgba(96,165,250,.2)",borderRadius:18,padding:"22px 24px",marginBottom:10}}>
+      {hover&&allData&&(
+        <div style={{position:"absolute",right:16,top:16,background:"rgba(10,20,35,.97)",border:"1px solid rgba(96,165,250,.35)",borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",gap:7,zIndex:30,boxShadow:"0 8px 24px rgba(0,0,0,.4)",animation:"fadeUp .18s ease both"}}>
+          {SECONDARY.map(m=>{
+            const md = allData[m.id];
+            return (
+              <div key={m.id} style={{display:"flex",alignItems:"center",gap:6}}>
+                <span style={{width:8,height:8,borderRadius:"50%",background:m.color,display:"inline-block"}}/>
+                <span style={{color:m.color,fontSize:10,fontWeight:700,fontFamily:"'DM Mono',monospace",minWidth:66}}>{m.name}</span>
+                <span style={{color:"#f0f9ff",fontSize:13,fontWeight:900,fontFamily:"'Syne',sans-serif"}}>
+                  {md&&!md.error ? `${md.temp}°C` : "—"}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
       <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:14}}>
         <span style={{background:"rgba(96,165,250,.15)",border:"1px solid rgba(96,165,250,.3)",borderRadius:8,padding:"3px 10px",color:"#60A5FA",fontSize:11,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>Meteoverso</span>
         <span style={{color:"#1e3a5f",fontSize:10}}>🇪🇸 Mejor para España</span>
@@ -577,6 +597,7 @@ export default function App() {
   const [vLoad,      setVLoad]      = useState({now:false,"24h":false,"7d":false});
   const [expanded,   setExpanded]   = useState({}); // {ecmwf_now: true, icon_24h: false, ...}
   const [hoverDay, setHoverDay] = useState(null); // indice del dia con burbuja abierta
+  const [hoverNow, setHoverNow] = useState(false); // burbuja de la tarjeta "ahora"
   const [showInstall,setShowInstall]= useState(false);
   const [deferredPrompt,setDeferredPrompt] = useState(null);
   const deb = useRef(null);
@@ -948,7 +969,7 @@ style={{width:"100%",display:status==="done"?"none":"flex",alignItems:"center",j
         )}
             {/* ── AHORA ── */}
             <div style={{marginBottom:28}}>
-              <PrimaryCurrentCard data={primary} loading={isLoading}/>
+              <PrimaryCurrentCard data={primary} loading={isLoading} allData={data} hover={hoverNow} onHover={setHoverNow}/>
               <VeredictoBox text={vNow} loading={vLoad.now} type="now"/>
               {/* Compare buttons */}
               {status==="done"&&primary&&!primary.error&&(
