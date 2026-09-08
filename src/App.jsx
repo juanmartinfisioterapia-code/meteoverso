@@ -99,6 +99,7 @@ async function fetchAEMET(lat, lon) {
     const r = await fetch(`/api/aemet?lat=${lat}&lon=${lon}`);
     if (!r.ok) throw new Error("HTTP " + r.status);
     const aemet = await r.json();
+    base.provincia = aemet?.provincia ?? null;
     const dias = aemet?.data?.[0]?.prediccion?.dia;
     if (Array.isArray(dias) && dias.length) {
       const pick = arr => arr?.find(p => p.periodo === "00-24") ?? arr?.[0];
@@ -601,6 +602,8 @@ export default function App() {
   const [hoverDay, setHoverDay] = useState(null); // indice del dia con burbuja abierta
   const [hoverNow, setHoverNow] = useState(false); // burbuja de la tarjeta "ahora"
   const [windOpen, setWindOpen] = useState(false); // modulo de viento abierto/cerrado
+  const [avisos, setAvisos] = useState([]); // avisos oficiales AEMET activos
+  const [avisosOpen, setAvisosOpen] = useState(false); // modulo de avisos abierto/cerrado
   const [showInstall,setShowInstall]= useState(false);
   const [deferredPrompt,setDeferredPrompt] = useState(null);
   const deb = useRef(null);
@@ -686,6 +689,20 @@ const autoGeoTried = useRef(false);
     setData(results);
     setStatus(Object.values(results).some(d=>d?.temp!=null) ? "done" : "error");
     saveRecent(lat, lon, name, [name].join(', '));
+
+    // Avisos oficiales AEMET (solo si tenemos provincia)
+    const provinciaDetectada = results.aemet?.provincia;
+    if (provinciaDetectada) {
+      try {
+        const ar = await fetch(`/api/avisos?provincia=${encodeURIComponent(provinciaDetectada)}`);
+        const aj = await ar.json();
+        setAvisos(Array.isArray(aj.avisos) ? aj.avisos : []);
+      } catch {
+        setAvisos([]);
+      }
+    } else {
+      setAvisos([]);
+    }
     // Generate 3 veredictos in parallel
     const [vn, v2, v7] = await Promise.all([
       generateVeredicto(results, name, "now"),
@@ -991,6 +1008,35 @@ style={{width:"100%",display:status==="done"?"none":"flex",alignItems:"center",j
                           <div style={{fontSize:18,margin:"4px 0",display:"inline-block",transform:`rotate(${(h.windD||0)+180}deg)`}}>↑</div>
                           <div style={{color:"#f0f9ff",fontSize:12,fontWeight:700}}>{h.wind}<span style={{fontSize:9,color:"#2e6b8a"}}>km/h</span></div>
                           <div style={{color:"#2e6b8a",fontSize:9}}>r.{h.gust}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {avisos.length>0&&(
+                <div style={{marginBottom:10}}>
+                  <div onClick={()=>setAvisosOpen(o=>!o)} style={{cursor:"pointer",background:avisos.some(a=>a.nivel==="rojo")?"rgba(239,68,68,.1)":avisos.some(a=>a.nivel==="naranja")?"rgba(249,115,22,.1)":"rgba(234,179,8,.1)",border:`1px solid ${avisos.some(a=>a.nivel==="rojo")?"rgba(239,68,68,.35)":avisos.some(a=>a.nivel==="naranja")?"rgba(249,115,22,.35)":"rgba(234,179,8,.35)"}`,borderRadius:14,padding:"14px 16px",display:"flex",alignItems:"center",gap:12}}>
+                    <span style={{fontSize:24}}>⚠️</span>
+                    <div style={{flex:1}}>
+                      <div style={{color:"#fca5a5",fontSize:10,textTransform:"uppercase",letterSpacing:".06em",fontWeight:600}}>Avisos AEMET</div>
+                      <div style={{color:"#f0f9ff",fontSize:15,fontWeight:900,fontFamily:"'Syne',sans-serif"}}>
+                        {avisos.length} aviso{avisos.length>1?"s":""} activo{avisos.length>1?"s":""}
+                      </div>
+                    </div>
+                    <span style={{color:"#fca5a5",fontSize:12,transform:avisosOpen?"rotate(180deg)":"none",transition:"transform .2s",display:"inline-block"}}>▾</span>
+                  </div>
+                  {avisosOpen&&(
+                    <div style={{marginTop:8,display:"flex",flexDirection:"column",gap:6,animation:"fadeUp .2s ease both"}}>
+                      {avisos.map((a,i)=>(
+                        <div key={i} style={{background:a.nivel==="rojo"?"rgba(239,68,68,.08)":a.nivel==="naranja"?"rgba(249,115,22,.08)":"rgba(234,179,8,.08)",border:`1px solid ${a.nivel==="rojo"?"rgba(239,68,68,.3)":a.nivel==="naranja"?"rgba(249,115,22,.3)":"rgba(234,179,8,.3)"}`,borderRadius:10,padding:"10px 12px"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
+                            <span style={{width:8,height:8,borderRadius:"50%",background:a.nivel==="rojo"?"#EF4444":a.nivel==="naranja"?"#F97316":"#EAB308",display:"inline-block"}}/>
+                            <span style={{color:"#f0f9ff",fontSize:12,fontWeight:700}}>{a.evento}</span>
+                          </div>
+                          <div style={{color:"#93c5fd",fontSize:10,marginBottom:2}}>{a.zona}</div>
+                          {a.descripcion&&<div style={{color:"#cbd5e1",fontSize:11}}>{a.descripcion}</div>}
                         </div>
                       ))}
                     </div>
