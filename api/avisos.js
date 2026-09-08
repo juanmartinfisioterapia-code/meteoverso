@@ -26,6 +26,16 @@ export default async function handler(req, res) {
 
     const fileRes = await fetch(meta.datos);
     const buffer = Buffer.from(await fileRes.arrayBuffer());
+
+    const esGzip = buffer.length >= 2 && buffer[0] === 0x1f && buffer[1] === 0x8b;
+    if (!esGzip) {
+      return res.status(500).json({
+        error: 'La respuesta de AEMET no es un archivo comprimido valido',
+        fileResStatus: fileRes.status,
+        primerosBytes: buffer.slice(0, 300).toString('utf-8'),
+      });
+    }
+
     const gunzipped = zlib.gunzipSync(buffer);
 
     const avisos = [];
