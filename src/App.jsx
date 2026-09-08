@@ -136,8 +136,8 @@ async function fetchWeatherDirect(lat, lon, param) {
 
   const url =
     `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
-    `&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,precipitation,surface_pressure,visibility,uv_index` +
-    `&hourly=temperature_2m,apparent_temperature,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_direction_10m,relative_humidity_2m` +
+    `&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation,surface_pressure,visibility,uv_index` +
+    `&hourly=temperature_2m,apparent_temperature,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,relative_humidity_2m` +
     `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_direction_10m_dominant,uv_index_max,sunrise,sunset` +
     `&wind_speed_unit=kmh&timezone=auto&models=${param}&forecast_days=7`;
   const r = await fetch(url);
@@ -159,6 +159,7 @@ async function fetchWeatherDirect(lat, lon, param) {
           precipProb: d.hourly.precipitation_probability[i] ?? 0,
           wind: Math.round(d.hourly.wind_speed_10m[i]),
           windD: d.hourly.wind_direction_10m[i],
+          gust: Math.round(d.hourly.wind_gusts_10m?.[i] ?? d.hourly.wind_speed_10m[i]),
           humidity: d.hourly.relative_humidity_2m[i],
           info: wmo(d.hourly.weather_code[i], new Date(d.hourly.time[i])),
         });
@@ -192,7 +193,7 @@ async function fetchWeatherDirect(lat, lon, param) {
   return {
     temp: Math.round(c.temperature_2m), feels: Math.round(c.apparent_temperature),
     humidity: Math.round(c.relative_humidity_2m), wind: Math.round(c.wind_speed_10m),
-    windD: Math.round(c.wind_direction_10m ?? 0), precip: +c.precipitation.toFixed(1),
+    windD: Math.round(c.wind_direction_10m ?? 0), gust: Math.round(c.wind_gusts_10m ?? c.wind_speed_10m ?? 0), precip: +c.precipitation.toFixed(1),
     pressure: Math.round(c.surface_pressure),
     vis: c.visibility != null ? +(c.visibility/1000).toFixed(1) : null,
     uv: c.uv_index, info: wmo(c.weather_code, new Date()), hourly, daily,
@@ -203,8 +204,8 @@ async function fetchWeatherDirect(lat, lon, param) {
 async function fetchWeather(lat, lon, param) {
   const url =
     `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
-    `&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,precipitation,surface_pressure,visibility,uv_index` +
-    `&hourly=temperature_2m,apparent_temperature,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_direction_10m,relative_humidity_2m` +
+    `&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation,surface_pressure,visibility,uv_index` +
+    `&hourly=temperature_2m,apparent_temperature,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,relative_humidity_2m` +
     `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_direction_10m_dominant,uv_index_max,sunrise,sunset` +
     `&wind_speed_unit=kmh&timezone=auto&models=${param}&forecast_days=7`;
   const r = await fetch(url);
@@ -226,6 +227,7 @@ async function fetchWeather(lat, lon, param) {
           precipProb: d.hourly.precipitation_probability[i] ?? 0,
           wind: Math.round(d.hourly.wind_speed_10m[i]),
           windD: d.hourly.wind_direction_10m[i],
+          gust: Math.round(d.hourly.wind_gusts_10m?.[i] ?? d.hourly.wind_speed_10m[i]),
           humidity: d.hourly.relative_humidity_2m[i],
           info: wmo(d.hourly.weather_code[i], new Date(d.hourly.time[i])),
         });
@@ -253,7 +255,7 @@ async function fetchWeather(lat, lon, param) {
   return {
     temp: Math.round(c.temperature_2m), feels: Math.round(c.apparent_temperature),
     humidity: Math.round(c.relative_humidity_2m), wind: Math.round(c.wind_speed_10m),
-    windD: Math.round(c.wind_direction_10m ?? 0), precip: +c.precipitation.toFixed(1),
+    windD: Math.round(c.wind_direction_10m ?? 0), gust: Math.round(c.wind_gusts_10m ?? c.wind_speed_10m ?? 0), precip: +c.precipitation.toFixed(1),
     pressure: Math.round(c.surface_pressure),
     vis: c.visibility != null ? +(c.visibility/1000).toFixed(1) : null,
     uv: c.uv_index, info: wmo(c.weather_code, new Date()), hourly, daily,
@@ -598,6 +600,7 @@ export default function App() {
   const [expanded,   setExpanded]   = useState({}); // {ecmwf_now: true, icon_24h: false, ...}
   const [hoverDay, setHoverDay] = useState(null); // indice del dia con burbuja abierta
   const [hoverNow, setHoverNow] = useState(false); // burbuja de la tarjeta "ahora"
+  const [windOpen, setWindOpen] = useState(false); // modulo de viento abierto/cerrado
   const [showInstall,setShowInstall]= useState(false);
   const [deferredPrompt,setDeferredPrompt] = useState(null);
   const deb = useRef(null);
@@ -966,6 +969,35 @@ style={{width:"100%",display:status==="done"?"none":"flex",alignItems:"center",j
             {/* ── AHORA ── */}
             <div style={{marginBottom:28}}>
               <PrimaryCurrentCard data={primary} loading={isLoading} allData={data} hover={hoverNow} onHover={setHoverNow}/>
+
+              {status==="done"&&primary&&!primary.error&&(
+                <div style={{marginBottom:10}}>
+                  <div onClick={()=>setWindOpen(o=>!o)} style={{cursor:"pointer",background:"rgba(96,165,250,.06)",border:"1px solid rgba(96,165,250,.2)",borderRadius:14,padding:"14px 16px",display:"flex",alignItems:"center",gap:12}}>
+                    <span style={{fontSize:24}}>💨</span>
+                    <div style={{flex:1}}>
+                      <div style={{color:"#93c5fd",fontSize:10,textTransform:"uppercase",letterSpacing:".06em",fontWeight:600}}>Viento</div>
+                      <div style={{color:"#f0f9ff",fontSize:16,fontWeight:900,fontFamily:"'Syne',sans-serif"}}>
+                        {primary.wind}km/h {windDir(primary.windD)}
+                        <span style={{color:"#2e6b8a",fontSize:12,fontWeight:600,marginLeft:8}}>· rachas {primary.gust}km/h</span>
+                      </div>
+                    </div>
+                    <span style={{color:"#60A5FA",fontSize:12,transform:windOpen?"rotate(180deg)":"none",transition:"transform .2s",display:"inline-block"}}>▾</span>
+                  </div>
+                  {windOpen&&(
+                    <div style={{marginTop:8,background:"rgba(255,255,255,.03)",borderRadius:12,padding:"12px 14px",display:"flex",gap:14,overflowX:"auto",animation:"fadeUp .2s ease both"}}>
+                      {primary.hourly?.slice(0,12).map((h,i)=>(
+                        <div key={i} style={{minWidth:52,textAlign:"center",flexShrink:0}}>
+                          <div style={{color:"#0f2035",fontSize:10,fontFamily:"'DM Mono',monospace"}}>{fmtHour(h.time)}</div>
+                          <div style={{fontSize:18,margin:"4px 0",display:"inline-block",transform:`rotate(${(h.windD||0)+180}deg)`}}>↑</div>
+                          <div style={{color:"#f0f9ff",fontSize:12,fontWeight:700}}>{h.wind}<span style={{fontSize:9,color:"#2e6b8a"}}>km/h</span></div>
+                          <div style={{color:"#2e6b8a",fontSize:9}}>r.{h.gust}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <VeredictoBox text={vNow} loading={vLoad.now} type="now"/>
               {/* Compare buttons */}
               {status==="done"&&primary&&!primary.error&&(
