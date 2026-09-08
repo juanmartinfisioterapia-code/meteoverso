@@ -890,10 +890,6 @@ style={{width:"100%",display:status==="done"?"none":"flex",alignItems:"center",j
               </div>
             )}
             <div style={{textAlign:"center"}}><p style={{color:"#94a3b8",fontSize:12,lineHeight:1.9}}>Sin registro · Sin API key · Datos científicos reales</p></div>
-            <WorldMap onCitySelect={(lat, lon, name, label) => {
-              setInput(label);
-              runModels(lat, lon, name);
-            }}/>
           </div>
         )}
 
