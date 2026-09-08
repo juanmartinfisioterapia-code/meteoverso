@@ -576,6 +576,7 @@ export default function App() {
   const [v7d,        setV7d]        = useState("");
   const [vLoad,      setVLoad]      = useState({now:false,"24h":false,"7d":false});
   const [expanded,   setExpanded]   = useState({}); // {ecmwf_now: true, icon_24h: false, ...}
+  const [hoverDay, setHoverDay] = useState(null); // indice del dia con burbuja abierta
   const [showInstall,setShowInstall]= useState(false);
   const [deferredPrompt,setDeferredPrompt] = useState(null);
   const deb = useRef(null);
@@ -893,7 +894,11 @@ style={{width:"100%",display:status==="done"?"none":"flex",alignItems:"center",j
               {primary?.daily?.length>0&&(
                 <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:8}}>
                   {primary.daily.map((d,i)=>(
-                    <div key={i} style={{background:"rgba(96,165,250,.05)",border:"1px solid rgba(96,165,250,.15)",borderRadius:12,padding:"8px 12px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+                    <div key={i}
+                      onMouseEnter={()=>setHoverDay(i)}
+                      onMouseLeave={()=>setHoverDay(h=>h===i?null:h)}
+                      onClick={()=>setHoverDay(h=>h===i?null:i)}
+                      style={{position:"relative",background:"rgba(96,165,250,.05)",border:"1px solid rgba(96,165,250,.15)",borderRadius:12,padding:"8px 12px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",cursor:"pointer"}}>
                       <div style={{minWidth:64}}>
                         <div style={{fontFamily:"'Syne',sans-serif",fontSize:11,fontWeight:900,color:i===0?"#38BDF8":i===1?"#60A5FA":"#2e6b8a"}}>
                           {i===0?"Hoy":i===1?"Mañana":DAYS_ES[d.date.getDay()]}
@@ -914,6 +919,23 @@ style={{width:"100%",display:status==="done"?"none":"flex",alignItems:"center",j
                           </div>
                         ))}
                       </div>
+
+                      {hoverDay===i&&(
+                        <div style={{position:"absolute",right:0,top:"100%",marginTop:6,background:"rgba(10,20,35,.97)",border:"1px solid rgba(96,165,250,.35)",borderRadius:10,padding:"8px 10px",display:"flex",flexDirection:"column",gap:6,zIndex:30,boxShadow:"0 8px 24px rgba(0,0,0,.4)",animation:"fadeUp .18s ease both"}}>
+                          {SECONDARY.map(m=>{
+                            const dd = data[m.id]?.daily?.[i];
+                            return (
+                              <div key={m.id} style={{display:"flex",alignItems:"center",gap:6}}>
+                                <span style={{width:8,height:8,borderRadius:"50%",background:m.color,display:"inline-block"}}/>
+                                <span style={{color:m.color,fontSize:10,fontWeight:700,fontFamily:"'DM Mono',monospace",minWidth:60}}>{m.name}</span>
+                                <span style={{color:"#f0f9ff",fontSize:12,fontWeight:900,fontFamily:"'Syne',sans-serif"}}>
+                                  {dd ? `${dd.tempMax}°/${dd.tempMin}°` : "—"}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
